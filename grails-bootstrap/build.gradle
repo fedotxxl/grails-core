@@ -37,6 +37,8 @@ dependencies {
     compile("org.codehaus.gant:gant_groovy1.8:${gantVersion}") {
         exclude module:'commons-cli'
     }
+
+    compile "io.belov.grails:grails-dir-watcher:1.0-SNAPSHOT"
 }
 
 sourceSets {

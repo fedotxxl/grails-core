@@ -62,6 +62,7 @@ dependencies {
 
     compile "org.springframework:spring-tx:${springVersion}"
     compile project(":grails-bootstrap"), project(":grails-spring")
+    compile "io.belov.grails:grails-dir-watcher:1.0-SNAPSHOT"
 }
 
 compileGroovy.doFirst {
