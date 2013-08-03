@@ -14,7 +14,7 @@ buildscript {
 apply plugin: 'idea'
 
 ext {
-    grailsVersion = '2.2.4'
+    grailsVersion = '2.2.4.BUILD-SNAPSHOT'
     isBuildSnapshot = grailsVersion.endsWith(".BUILD-SNAPSHOT")
     antTraxVersion = "1.7.1"
     antVersion = "1.8.2"
@@ -86,6 +86,7 @@ allprojects {
         maven { url "http://repo.grails.org/grails/core" }
         // TODO configure this as a remote for repo.grails.org so we don't need this here...
         maven { url 'http://oss.sonatype.org/content/repositories/snapshots' }
+        maven { url "http://maven.scm-manager.org/nexus/content/repositories/thirdparty/" }
     }
 
     configurations {
@@ -123,8 +124,8 @@ subprojects { project ->
     apply plugin: 'signing'
     //apply plugin: 'duplicates'
 
-    sourceCompatibility = "1.5"
-    targetCompatibility = "1.5"
+    sourceCompatibility = "1.6"
+    targetCompatibility = "1.6"
     archivesBaseName = 'grails'
     version = grailsVersion
     group = "org.grails"
