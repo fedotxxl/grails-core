@@ -1,4 +1,5 @@
-/* Copyright 2006-2007 Graeme Rocher
+/*
+ * Copyright 2006-2007 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,7 @@
 package grails.converters;
 
 import grails.util.GrailsNameUtils;
+import grails.util.GrailsWebUtil;
 import groovy.lang.Closure;
 import groovy.util.BuilderSupport;
 import groovy.util.XmlSlurper;
@@ -25,13 +27,15 @@ import org.codehaus.groovy.grails.support.proxy.ProxyHandler;
 import org.codehaus.groovy.grails.web.converters.AbstractConverter;
 import org.codehaus.groovy.grails.web.converters.Converter;
 import org.codehaus.groovy.grails.web.converters.ConverterUtil;
+import org.codehaus.groovy.grails.web.converters.IncludeExcludeConverter;
 import org.codehaus.groovy.grails.web.converters.configuration.ConverterConfiguration;
 import org.codehaus.groovy.grails.web.converters.configuration.ConvertersConfigurationHolder;
 import org.codehaus.groovy.grails.web.converters.configuration.DefaultConverterConfiguration;
 import org.codehaus.groovy.grails.web.converters.exceptions.ConverterException;
-import org.codehaus.groovy.grails.web.converters.marshaller.ClosureOjectMarshaller;
+import org.codehaus.groovy.grails.web.converters.marshaller.ClosureObjectMarshaller;
 import org.codehaus.groovy.grails.web.converters.marshaller.NameAwareMarshaller;
 import org.codehaus.groovy.grails.web.converters.marshaller.ObjectMarshaller;
+import org.codehaus.groovy.grails.web.mime.MimeType;
 import org.codehaus.groovy.grails.web.pages.FastStringWriter;
 import org.codehaus.groovy.grails.web.xml.PrettyPrintXMLStreamWriter;
 import org.codehaus.groovy.grails.web.xml.StreamingMarkupWriter;
@@ -44,6 +48,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Writer;
+import java.util.List;
 import java.util.Map;
 import java.util.Stack;
 
@@ -53,7 +58,7 @@ import java.util.Stack;
  * @author Siegfried Puchbauer
  * @author Graeme Rocher
  */
-public class XML extends AbstractConverter<XMLStreamWriter> {
+public class XML extends AbstractConverter<XMLStreamWriter> implements IncludeExcludeConverter<XMLStreamWriter> {
 
     public static final Log log = LogFactory.getLog(XML.class);
 
@@ -71,6 +76,7 @@ public class XML extends AbstractConverter<XMLStreamWriter> {
     public XML() {
         config = ConvertersConfigurationHolder.getConverterConfiguration(XML.class);
         encoding = config.getEncoding() != null ? config.getEncoding() : "UTF-8";
+        contentType = MimeType.XML.getName();
         circularReferenceBehaviour = config.getCircularReferenceBehaviour();
     }
 
@@ -78,6 +84,14 @@ public class XML extends AbstractConverter<XMLStreamWriter> {
         this();
         this.target = target;
     }
+
+    public XML(XMLStreamWriter writer) {
+        this();
+        this.writer = writer;
+        this.isRendering = true;
+    }
+
+
 
     protected ConverterConfiguration<XML> initConfig() {
         return ConvertersConfigurationHolder.getConverterConfiguration(XML.class);
@@ -176,7 +190,7 @@ public class XML extends AbstractConverter<XMLStreamWriter> {
         }
     }
 
-    public ObjectMarshaller<XML> lookupObjectMarshaller(@SuppressWarnings("hiding") Object target) {
+    public ObjectMarshaller<XML> lookupObjectMarshaller(Object target) {
         return config.getMarshaller(target);
     }
 
@@ -247,7 +261,7 @@ public class XML extends AbstractConverter<XMLStreamWriter> {
     }
 
     public void render(HttpServletResponse response) throws ConverterException {
-        response.setContentType("text/xml");
+        response.setContentType(GrailsWebUtil.getContentType(contentType, encoding));
         try {
             render(response.getWriter());
         }
@@ -381,11 +395,11 @@ public class XML extends AbstractConverter<XMLStreamWriter> {
     }
 
     public static void registerObjectMarshaller(Class<?> clazz, Closure<?> callable) throws ConverterException {
-        registerObjectMarshaller(new ClosureOjectMarshaller<XML>(clazz, callable));
+        registerObjectMarshaller(new ClosureObjectMarshaller<XML>(clazz, callable));
     }
 
     public static void registerObjectMarshaller(Class<?> clazz, int priority, Closure<?> callable) throws ConverterException {
-        registerObjectMarshaller(new ClosureOjectMarshaller<XML>(clazz, callable), priority);
+        registerObjectMarshaller(new ClosureObjectMarshaller<XML>(clazz, callable), priority);
     }
 
     public static void registerObjectMarshaller(ObjectMarshaller<XML> om) throws ConverterException {
@@ -435,6 +449,16 @@ public class XML extends AbstractConverter<XMLStreamWriter> {
         catch (Throwable t) {
             throw ConverterUtil.resolveConverterException(t);
         }
+    }
+
+    @Override
+    public void setIncludes(List<String> includes) {
+        setIncludes(target.getClass(), includes);
+    }
+
+    @Override
+    public void setExcludes(List<String> excludes) {
+        setExcludes(target.getClass(), excludes);
     }
 
     public class Builder extends BuilderSupport {

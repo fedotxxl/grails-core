@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +15,19 @@
  */
 package org.codehaus.groovy.grails.web.metaclass
 
-import org.codehaus.groovy.grails.commons.GrailsClassUtils as GCU
-
 import grails.util.GrailsNameUtils
+
+import javax.servlet.http.HttpServletRequest
+
 import org.codehaus.groovy.grails.commons.ControllerArtefactHandler
+import org.codehaus.groovy.grails.commons.GrailsClassUtils as GCU
 import org.codehaus.groovy.grails.web.mapping.UrlCreator
 import org.codehaus.groovy.grails.web.mapping.UrlMappingsHolder
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
 import org.springframework.web.context.request.RequestContextHolder
+import org.springframework.web.servlet.support.RequestDataValueProcessor
 
- /**
+/**
  * Implementation of the chain() method for controllers.
  *
  * @author Graeme Rocher
@@ -33,7 +37,7 @@ class ChainMethod {
 
     static invoke(target, Map args = [:]) {
         def controller = args.controller ?: GrailsNameUtils.getLogicalPropertyName(
-            target.class.name, ControllerArtefactHandler.TYPE)
+            target.getClass().name, ControllerArtefactHandler.TYPE)
         def action = args.action
         def plugin = args.remove('plugin')
         def id = args.id
@@ -41,7 +45,7 @@ class ChainMethod {
         def model = args.model ?: [:]
 
         def actionParams = params.findAll { it.key?.startsWith('_action_') }
-        actionParams?.each { params.remove(it.key) }
+        actionParams.each { params.remove(it.key) }
 
         GrailsWebRequest webRequest = RequestContextHolder.currentRequestAttributes()
         def flash = webRequest.getFlashScope()
@@ -74,7 +78,17 @@ class ChainMethod {
         UrlCreator creator = mappings.getReverseMapping(controller, action, plugin, params)
         def response = webRequest.getCurrentResponse()
 
-        def url = response.encodeRedirectURL(creator.createURL(controller, action, plugin, params, 'utf-8'))
+        String url = creator.createURL(controller, action, plugin, params, 'utf-8')
+
+        if (appCtx.containsBean("requestDataValueProcessor")) {
+            RequestDataValueProcessor valueProcessor = appCtx.getBean("requestDataValueProcessor")
+            if (valueProcessor != null) {
+                HttpServletRequest request = webRequest.getCurrentRequest()
+                url = response.encodeRedirectURL(valueProcessor.processUrl(request, url))
+            }
+        } else {
+            url = response.encodeRedirectURL(url)
+        }
         response.sendRedirect url
     }
 }

@@ -2,6 +2,7 @@ package org.codehaus.groovy.grails.web.servlet.mvc
 
 import grails.util.GrailsNameUtils
 import grails.util.GrailsWebUtil
+import grails.util.Metadata
 import grails.web.CamelCaseUrlConverter
 import grails.web.UrlConverter
 
@@ -11,14 +12,20 @@ import org.codehaus.groovy.grails.commons.DefaultGrailsApplication
 import org.codehaus.groovy.grails.commons.GrailsApplication
 import org.codehaus.groovy.grails.commons.spring.WebRuntimeSpringConfiguration
 import org.codehaus.groovy.grails.compiler.injection.GrailsAwareClassLoader
-import org.codehaus.groovy.grails.plugins.*
+import org.codehaus.groovy.grails.plugins.DefaultGrailsPlugin
+import org.codehaus.groovy.grails.plugins.DefaultPluginMetaManager
+import org.codehaus.groovy.grails.plugins.MockGrailsPluginManager
+import org.codehaus.groovy.grails.plugins.PluginManagerHolder
+import org.codehaus.groovy.grails.plugins.PluginMetaManager
 import org.codehaus.groovy.grails.plugins.testing.GrailsMockHttpServletRequest
 import org.codehaus.groovy.grails.plugins.testing.GrailsMockHttpServletResponse
 import org.codehaus.groovy.grails.support.MockApplicationContext
-import org.codehaus.groovy.grails.web.mime.MimeType
+import org.codehaus.groovy.grails.web.binding.DataBindingUtils
+import org.codehaus.groovy.grails.web.binding.GrailsWebDataBinder
 import org.codehaus.groovy.grails.web.pages.DefaultGroovyPagesUriService
 import org.codehaus.groovy.grails.web.pages.GroovyPagesUriService
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes
+import org.grails.databinding.converters.DateConversionHelper
 import org.springframework.context.ApplicationContext
 import org.springframework.context.support.StaticMessageSource
 import org.springframework.core.io.Resource
@@ -43,14 +50,14 @@ abstract class AbstractGrailsControllerTests extends GroovyTestCase {
     def originalHandler
 
     /**
-    * Subclasses may override this method to return a list of classes which should
-    * be added to the GrailsApplication as controller classes
-    *
-    * @return a list of classes
-    */
-   protected Collection<Class> getControllerClasses() {
-       Collections.EMPTY_LIST
-   }
+     * Subclasses may override this method to return a list of classes which should
+     * be added to the GrailsApplication as controller classes
+     *
+     * @return a list of classes
+     */
+    protected Collection<Class> getControllerClasses() {
+        Collections.EMPTY_LIST
+    }
 
     /**
      * Subclasses may override this method to return a list of classes which should
@@ -74,6 +81,13 @@ abstract class AbstractGrailsControllerTests extends GroovyTestCase {
         ctx = new MockApplicationContext()
         onSetUp()
         ga = new DefaultGrailsApplication(gcl.getLoadedClasses(), gcl)
+
+        def binder = new GrailsWebDataBinder(ga)
+        binder.registerConverter new DateConversionHelper()
+
+        ctx.registerMockBean(DataBindingUtils.DATA_BINDER_BEAN_NAME, binder)
+
+        ga.metadata[Metadata.APPLICATION_NAME] = getClass().name
         mockManager = new MockGrailsPluginManager(ga)
         ctx.registerMockBean("manager", mockManager)
         def dependantPluginClasses = []
@@ -94,14 +108,11 @@ abstract class AbstractGrailsControllerTests extends GroovyTestCase {
         mockManager.doArtefactConfiguration()
         ctx.registerMockBean(PluginMetaManager.BEAN_ID, new DefaultPluginMetaManager())
 
-        def mainContext = new MockApplicationContext()
-        mainContext.registerMockBean(UrlConverter.BEAN_NAME, new CamelCaseUrlConverter())
-        ga.mainContext = mainContext
         ga.initialise()
 
         ga.setApplicationContext(ctx)
-        domainClasses?.each { cc -> ga.addArtefact 'Domain', cc }
-        controllerClasses?.each { cc -> ga.addArtefact 'Controller', cc }
+        controllerClasses.each { cc -> ga.addArtefact 'Controller', cc }
+        domainClasses.each { c -> ga.addArtefact 'Domain', c }
 
         ctx.registerMockBean("pluginManager", mockManager)
         ctx.registerMockBean(GrailsApplication.APPLICATION_ID, ga)
@@ -117,6 +128,7 @@ abstract class AbstractGrailsControllerTests extends GroovyTestCase {
         dependentPlugins.each { mockManager.registerMockPlugin(it); it.manager = mockManager }
 
         appCtx = springConfig.getApplicationContext()
+        ga.mainContext = appCtx
 
         dependentPlugins*.doWithApplicationContext(appCtx)
         servletContext.setAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE, appCtx)
@@ -124,8 +136,7 @@ abstract class AbstractGrailsControllerTests extends GroovyTestCase {
         mockManager.applicationContext = appCtx
         mockManager.doDynamicMethods()
 
-        request = new GrailsMockHttpServletRequest()
-        request.characterEncoding = "utf-8"
+        request = new GrailsMockHttpServletRequest(characterEncoding: "utf-8")
         response = new GrailsMockHttpServletResponse()
         webRequest = GrailsWebUtil.bindMockWebRequest(appCtx, request, response)
     }
@@ -139,13 +150,11 @@ abstract class AbstractGrailsControllerTests extends GroovyTestCase {
         ExpandoMetaClass.disableGlobally()
 
         ConfigurationHolder.config = null
-        MimeType.reset()
         ApplicationHolder.application = null
         PluginManagerHolder.setPluginManager(null)
 
         super.tearDown()
     }
-
 
     def withConfig(String text, Closure callable) {
         def config = new ConfigSlurper().parse(text)
@@ -183,7 +192,7 @@ abstract class AbstractGrailsControllerTests extends GroovyTestCase {
         new PathMatchingResourcePatternResolver().getResources(pattern)
     }
 
-    protected creategGrailsApplication() {
+    protected createGrailsApplication() {
         def app = new DefaultGrailsApplication(gcl.loadedClasses, gcl)
         def mainContext = new MockApplicationContext()
         mainContext.registerMockBean UrlConverter.BEAN_NAME, new CamelCaseUrlConverter()

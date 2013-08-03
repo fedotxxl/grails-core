@@ -17,6 +17,11 @@ package org.codehaus.groovy.grails.web.converters.configuration;
 
 import grails.converters.JSON;
 import grails.converters.XML;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.codehaus.groovy.grails.commons.GrailsApplication;
@@ -28,10 +33,6 @@ import org.codehaus.groovy.grails.web.converters.marshaller.ObjectMarshaller;
 import org.codehaus.groovy.grails.web.converters.marshaller.ProxyUnwrappingMarshaller;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * @author Siegfried Puchbauer
@@ -103,6 +104,7 @@ public class ConvertersConfigurationInitializer implements ApplicationContextAwa
         Boolean defaultPrettyPrint = grailsConfig.get("grails.converters.default.pretty.print", false);
         Boolean prettyPrint = grailsConfig.get("grails.converters.json.pretty.print", defaultPrettyPrint);
         cfg.setPrettyPrint(prettyPrint);
+        cfg.setCacheObjectMarshallerByClass(grailsConfig.get("grails.converters.json.cacheObjectMarshallerSelectionByClass", true));
 
         registerObjectMarshallersFromApplicationContext(cfg, JSON.class);
 
@@ -151,6 +153,7 @@ public class ConvertersConfigurationInitializer implements ApplicationContextAwa
         Boolean defaultPrettyPrint = grailsConfig.get("grails.converters.default.pretty.print", false);
         Boolean prettyPrint = grailsConfig.get("grails.converters.xml.pretty.print", defaultPrettyPrint);
         cfg.setPrettyPrint(prettyPrint);
+        cfg.setCacheObjectMarshallerByClass(grailsConfig.get("grails.converters.xml.cacheObjectMarshallerSelectionByClass", true));
         registerObjectMarshallersFromApplicationContext(cfg, XML.class);
         ConvertersConfigurationHolder.setDefaultConfiguration(XML.class, new ChainedConverterConfiguration<XML>(cfg,proxyHandler));
     }

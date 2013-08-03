@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,7 @@
 package org.codehaus.groovy.grails.plugins.web.taglib
 
 import grails.artefact.Artefact
+import groovy.transform.CompileStatic
 import groovy.xml.MarkupBuilder
 
 import java.beans.PropertyEditor
@@ -22,15 +24,17 @@ import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 
 import org.apache.commons.lang.StringEscapeUtils
-import org.codehaus.groovy.grails.plugins.codecs.HTMLCodec
+import org.codehaus.groovy.grails.support.encoding.CodecLookup
+import org.codehaus.groovy.grails.support.encoding.Encoder
+import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
 import org.codehaus.groovy.grails.web.taglib.GroovyPageAttributes
 import org.springframework.beans.PropertyEditorRegistry
+import org.springframework.context.MessageSource
 import org.springframework.context.MessageSourceResolvable
 import org.springframework.context.NoSuchMessageException
 import org.springframework.context.support.DefaultMessageSourceResolvable
 import org.springframework.validation.Errors
 import org.springframework.web.context.request.RequestContextHolder
-import org.springframework.web.servlet.support.RequestContextUtils as RCU
 
 /**
  * Tags to handle validation and errors.
@@ -41,6 +45,9 @@ import org.springframework.web.servlet.support.RequestContextUtils as RCU
 class ValidationTagLib {
 
     static returnObjectForTags = ['message', 'fieldError', 'formatValue']
+
+    MessageSource messageSource
+    CodecLookup codecLookup
 
     /**
      * Renders an error message for the given bean and field.<br/>
@@ -78,32 +85,34 @@ class ValidationTagLib {
      */
     Closure fieldValue = { attrs, body ->
         def bean = attrs.bean
-        def field = attrs.field?.toString()
-        
+        String field = attrs.field?.toString()
+
+        if (!bean || !field) {
+            return
+        }
+
         def tagSyntaxCall = (attrs instanceof GroovyPageAttributes) ? attrs.isGspTagSyntaxCall() : false
-        
-        if (bean && field) {
-            if (bean.metaClass.hasProperty(bean,'errors')) {
-                Errors errors = bean.errors
-                def rejectedValue = errors?.getFieldError(field)?.rejectedValue
-                if (rejectedValue == null) {
-                    rejectedValue = bean
-                    for (String fieldPart in field.split("\\.")) {
-                        rejectedValue = rejectedValue?."$fieldPart"
-                    }
-                }
-                if (rejectedValue != null) {
-                    out << formatValue(rejectedValue, field, tagSyntaxCall)
-                }
-            }
-            else {
-                def rejectedValue = bean
+
+        if (bean.metaClass.hasProperty(bean, 'errors')) {
+            Errors errors = bean.errors
+            def rejectedValue = errors?.getFieldError(field)?.rejectedValue
+            if (rejectedValue == null) {
+                rejectedValue = bean
                 for (String fieldPart in field.split("\\.")) {
                     rejectedValue = rejectedValue?."$fieldPart"
                 }
-                if (rejectedValue != null) {
-                    out << formatValue(rejectedValue, field, tagSyntaxCall)
-                }
+            }
+            if (rejectedValue != null) {
+                out << formatValue(rejectedValue, field, tagSyntaxCall)
+            }
+        }
+        else {
+            def rejectedValue = bean
+            for (String fieldPart in field.split("\\.")) {
+                rejectedValue = rejectedValue?."$fieldPart"
+            }
+            if (rejectedValue != null) {
+                out << formatValue(rejectedValue, field, tagSyntaxCall)
             }
         }
     }
@@ -234,8 +243,7 @@ class ValidationTagLib {
      * @attr model The model reference to check for errors
      */
     Closure renderErrors = { attrs, body ->
-        def renderAs = attrs.remove('as')
-        if (!renderAs) renderAs = 'list'
+        def renderAs = attrs.remove('as') ?: 'list'
 
         if (renderAs == 'list') {
             def codec = attrs.codec ?: 'HTML'
@@ -280,23 +288,30 @@ class ValidationTagLib {
         messageImpl(attrs)
     }
 
-    def messageImpl(attrs) {
-        def messageSource = grailsAttributes.applicationContext.messageSource
-        def locale = attrs.locale ?: RCU.getLocale(request)
+    @CompileStatic
+    def messageImpl(Map attrs) {
+        Locale locale = FormatTagLib.resolveLocale(attrs.locale)
         def tagSyntaxCall = (attrs instanceof GroovyPageAttributes) ? attrs.isGspTagSyntaxCall() : false
 
         def text
-        def error = attrs.error ?: attrs.message
+        Object error = attrs.error ?: attrs.message
         if (error) {
-            if (!attrs.encodeAs && error instanceof MessageSourceResolvable && error.arguments) {
-                error = new DefaultMessageSourceResolvable(error.codes, encodeArgsIfRequired(error.arguments, tagSyntaxCall) as Object[], error.defaultMessage)
+            if (!attrs.encodeAs && error instanceof MessageSourceResolvable) {
+                MessageSourceResolvable errorResolvable = (MessageSourceResolvable)error
+                if (errorResolvable.arguments) {
+                    error = new DefaultMessageSourceResolvable(errorResolvable.codes, encodeArgsIfRequired(errorResolvable.arguments) as Object[], errorResolvable.defaultMessage)
+                }
             }
             try {
-                text = messageSource.getMessage(error , locale)
+                if (error instanceof MessageSourceResolvable) {
+                    text = messageSource.getMessage(error, locale)
+                } else {
+                    text = messageSource.getMessage(error.toString(), null, locale)
+                }
             }
             catch (NoSuchMessageException e) {
                 if (error instanceof MessageSourceResolvable) {
-                    text = error?.code
+                    text = ((MessageSourceResolvable)error).codes[0]
                 }
                 else {
                     text = error?.toString()
@@ -304,14 +319,14 @@ class ValidationTagLib {
             }
         }
         else if (attrs.code) {
-            def code = attrs.code
-            def args = []
-            if(attrs.args) {
-                args = attrs.encodeAs ? attrs.args : encodeArgsIfRequired(attrs.args, tagSyntaxCall)
+            String code = attrs.code?.toString()
+            List args = []
+            if (attrs.args) {
+                args = attrs.encodeAs ? attrs.args as List : encodeArgsIfRequired(attrs.args)
             }
-            def defaultMessage
+            String defaultMessage
             if (attrs.containsKey('default')) {
-                defaultMessage = attrs['default']
+                defaultMessage = attrs['default']?.toString()
             } else {
                 defaultMessage = code
             }
@@ -326,22 +341,20 @@ class ValidationTagLib {
             }
         }
         if (text) {
-            return (attrs.encodeAs && !attrs.encodeAs.equalsIgnoreCase('none')) ? text."encodeAs${attrs.encodeAs}"() : text
+            Encoder encoder = codecLookup.lookupEncoder(attrs.encodeAs?.toString() ?: 'raw')
+            return encoder  ? encoder.encode(text) : text
         }
         ''
     }
-    
-    private encodeArgsIfRequired(arguments, boolean tagSyntaxCall) {
-        if(arguments && (tagSyntaxCall || HTMLCodec.shouldEncode())) {
-            arguments.collect { value ->
-                if(value == null || value instanceof Number || value instanceof Date) {
-                    value      
-                } else {             
-                    value.toString().encodeAsHTML()
-                }
+
+    @CompileStatic
+    private List encodeArgsIfRequired(arguments) {
+        arguments.collect { value ->
+            if (value == null || value instanceof Number || value instanceof Date) {
+                value
+            } else {
+                codecLookup.lookupEncoder('HTML').encode(value)
             }
-        } else {
-            arguments
         }
     }
 
@@ -420,11 +433,11 @@ class ValidationTagLib {
                         out << "document.forms['${form}'].elements['${constraint.propertyName}']," // the field
                         out << '"Test message"' // TODO: Resolve the actual message
                         switch (vt) {
-                            case 'mask': out << ",function() { return '${constraint.regex}'; }";break;
-                            case 'intRange': out << ",function() { if (arguments[0]=='min') return ${constraint.range.from}; else return ${constraint.range.to} }";break;
-                            case 'floatRange': out << ",function() { if (arguments[0]=='min') return ${constraint.range.from}; else return ${constraint.range.to} }";break;
-                            case 'maxLength': out << ",function() { return ${constraint.maxSize};  }";break;
-                            case 'minLength': out << ",function() { return ${constraint.minSize};  }";break;
+                            case 'mask': out << ",function() { return '${constraint.regex}'; }";break
+                            case 'intRange': out << ",function() { if (arguments[0]=='min') return ${constraint.range.from}; else return ${constraint.range.to} }";break
+                            case 'floatRange': out << ",function() { if (arguments[0]=='min') return ${constraint.range.from}; else return ${constraint.range.to} }";break
+                            case 'maxLength': out << ",function() { return ${constraint.maxSize};  }";break
+                            case 'minLength': out << ",function() { return ${constraint.minSize};  }";break
                         }
                         out << ');\n'
                     }
@@ -437,7 +450,7 @@ class ValidationTagLib {
             def validateType = k.substring(0,1).toUpperCase() + k.substring(1)
             out << "if (!validate${validateType}(form)) return false;\n"
         }
-        out << 'return true;\n';
+        out << 'return true;\n'
         out << '}\n'
         // out << "document.forms['${attrs.form}'].onsubmit = function(e) {return validateForm(this)}\n"
         out << '</script>'
@@ -454,7 +467,7 @@ class ValidationTagLib {
         PropertyEditor editor = registry.findCustomEditor(value.getClass(), propertyPath)
         if (editor) {
             editor.setValue(value)
-            return (tagSyntaxCall || HTMLCodec.shouldEncode()) && !(value instanceof Number) ? editor.asText?.encodeAsHTML() : editor.asText
+            return !(value instanceof Number) ? editor.asText?.encodeAsHTML() : editor.asText
         }
 
         if (value instanceof Number) {
@@ -462,7 +475,7 @@ class ValidationTagLib {
             if (value instanceof Double || value instanceof Float || value instanceof BigDecimal) {
                 pattern = "0.00#####"
             }
-            def locale = RCU.getLocale(request)
+            def locale = GrailsWebRequest.lookup().getLocale()
             def dcfs = locale ? new DecimalFormatSymbols(locale) : new DecimalFormatSymbols()
             def decimalFormat = new DecimalFormat(pattern, dcfs)
             value = decimalFormat.format(value)
@@ -472,6 +485,6 @@ class ValidationTagLib {
             value = message(message: value)
         }
 
-        return (tagSyntaxCall || HTMLCodec.shouldEncode()) ? value.toString().encodeAsHTML() : value
+        return value.toString().encodeAsHTML()
     }
 }

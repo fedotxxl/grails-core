@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.test.support
 
 import org.codehaus.groovy.grails.plugins.testing.GrailsMockHttpServletRequest
@@ -58,7 +57,6 @@ class GrailsTestRequestEnvironmentInterceptor {
      */
     void destroy() {
         RequestContextHolder.requestAttributes = null
-        ServletContextHolder.servletContext = null
     }
 
     /**

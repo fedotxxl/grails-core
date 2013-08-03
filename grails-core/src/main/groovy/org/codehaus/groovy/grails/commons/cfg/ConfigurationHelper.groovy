@@ -1,4 +1,5 @@
-/* Copyright 2006-2007 Graeme Rocher
+/*
+ * Copyright 2006-2007 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,7 +131,7 @@ class ConfigurationHelper {
         if (application) {
             binding.put(CONFIG_BINDING_APP_NAME, application.getMetadata().get(Metadata.APPLICATION_NAME))
             binding.put(CONFIG_BINDING_APP_VERSION, application.getMetadata().get(Metadata.APPLICATION_VERSION))
-            binding.put(GrailsApplication.APPLICATION_ID, application);
+            binding.put(GrailsApplication.APPLICATION_ID, application)
         }
 
         configSlurper.setBinding(binding)

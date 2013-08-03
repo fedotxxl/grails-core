@@ -1,4 +1,5 @@
-/* Copyright (C) 2011 SpringSource
+/*
+ * Copyright (C) 2011 SpringSource
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -175,7 +176,7 @@ public class DefaultConstraintEvaluator implements ConstraintsEvaluator {
         }
     }
 
-    protected boolean canPropertyBeConstrained(@SuppressWarnings("unused") GrailsDomainClassProperty property) {
+    protected boolean canPropertyBeConstrained(GrailsDomainClassProperty property) {
         return true;
     }
 
@@ -229,7 +230,7 @@ public class DefaultConstraintEvaluator implements ConstraintsEvaluator {
 
     @SuppressWarnings("unchecked")
     protected void applyDefaultConstraints(String propertyName, GrailsDomainClassProperty p,
-            ConstrainedProperty cp, @SuppressWarnings("hiding") Map<String, Object> defaultConstraints) {
+            ConstrainedProperty cp, Map<String, Object> defaultConstraints) {
 
         if (defaultConstraints != null && !defaultConstraints.isEmpty()) {
             if (defaultConstraints.containsKey("*")) {
@@ -246,8 +247,7 @@ public class DefaultConstraintEvaluator implements ConstraintsEvaluator {
         }
     }
 
-    protected void applyDefaultNullableConstraint(@SuppressWarnings("unused") GrailsDomainClassProperty p,
-            ConstrainedProperty cp) {
+    protected void applyDefaultNullableConstraint(GrailsDomainClassProperty p, ConstrainedProperty cp) {
         applyDefaultNullableConstraint(cp);
     }
 

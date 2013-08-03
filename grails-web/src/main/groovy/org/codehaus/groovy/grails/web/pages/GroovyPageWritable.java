@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,8 +43,7 @@ import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 
 /**
- * An instance of groovy.lang.Writable that writes itself to the specified
- * writer, typically the response writer.
+ * Writes itself to the specified writer, typically the response writer.
  *
  * @author Graeme Rocher
  * @author Lari Hotari
@@ -166,20 +166,11 @@ class GroovyPageWritable implements Writable {
             String previousGspCode = GSP_NONE_CODEC_NAME;
             if (hasRequest) {
                 request.setAttribute(GrailsApplicationAttributes.PAGE_SCOPE, binding);
-                previousGspCode = (String)request.getAttribute(GrailsApplicationAttributes.GSP_CODEC);                
+                previousGspCode = (String)request.getAttribute(GrailsApplicationAttributes.GSP_CODEC);
             }
-            
-            if (metaInfo.getCodecClass() != null) {
-                if (hasRequest) {
-                    request.setAttribute(GrailsApplicationAttributes.GSP_CODEC, metaInfo.getCodecName());
-                }
-                binding.setVariableDirectly(GroovyPage.CODEC_VARNAME, metaInfo.getCodecClass());
-            } else {
-                if (hasRequest) {
-                    request.setAttribute(GrailsApplicationAttributes.GSP_CODEC, GSP_NONE_CODEC_NAME);
-                }
-                binding.setVariableDirectly(GroovyPage.CODEC_VARNAME, gspNoneCodeInstance);
-            }
+
+            makeLegacyCodecVariablesAvailable(hasRequest, binding);
+
             binding.setVariableDirectly(GroovyPage.RESPONSE, response);
             binding.setVariableDirectly(GroovyPage.REQUEST, request);
             // support development mode's evaluate (so that doesn't search for missing variable in parent bindings)
@@ -192,17 +183,13 @@ class GroovyPageWritable implements Writable {
             }
             page.setBinding(binding);
             binding.setOwner(page);
-            page.setJspTags(metaInfo.getJspTags());
-            page.setJspTagLibraryResolver(metaInfo.getJspTagLibraryResolver());
-            page.setGspTagLibraryLookup(metaInfo.getTagLibraryLookup());
-            page.setHtmlParts(metaInfo.getHtmlParts());
-            page.setPluginContextPath(metaInfo.getPluginPath());
-            page.initRun(out, webRequest, metaInfo.getGrailsApplication(), metaInfo.getCodecClass());
 
-            int debugId=0;
-            long debugStartTimeMs=0;
+            page.initRun(out, webRequest, metaInfo);
+
+            int debugId = 0;
+            long debugStartTimeMs = 0;
             if (debugTemplates) {
-                debugId=debugTemplatesIdCounter.incrementAndGet();
+                debugId = debugTemplatesIdCounter.incrementAndGet();
                 out.write("<!-- GSP #");
                 out.write(String.valueOf(debugId));
                 out.write(" START template: ");
@@ -239,6 +226,20 @@ class GroovyPageWritable implements Writable {
             }
         }
         return out;
+    }
+
+    private void makeLegacyCodecVariablesAvailable(boolean hasRequest, GroovyPageBinding binding) {
+        if (metaInfo.getExpressionEncoder() != null) {
+            if (hasRequest) {
+                request.setAttribute(GrailsApplicationAttributes.GSP_CODEC, metaInfo.getExpressionEncoder().getCodecIdentifier().getCodecName());
+            }
+            binding.setVariableDirectly(GroovyPage.CODEC_VARNAME, metaInfo.getExpressionEncoder());
+        } else {
+            if (hasRequest) {
+                request.setAttribute(GrailsApplicationAttributes.GSP_CODEC, GSP_NONE_CODEC_NAME);
+            }
+            binding.setVariableDirectly(GroovyPage.CODEC_VARNAME, gspNoneCodeInstance);
+        }
     }
 
     private static final GspNoneCodec gspNoneCodeInstance = new GspNoneCodec();

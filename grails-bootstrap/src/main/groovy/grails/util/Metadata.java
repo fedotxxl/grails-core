@@ -50,6 +50,7 @@ public class Metadata extends Properties {
 
     private File metadataFile;
     private boolean warDeployed;
+    private String servletVersion = DEFAULT_SERVLET_VERSION;
 
     private Metadata() {
         loadFromDefault();
@@ -158,13 +159,24 @@ public class Metadata extends Properties {
         return m;
     }
 
-
     /**
      * Loads and returns a new Metadata object for the given File.
      * @param file The File
      * @return A Metadata object
      */
     public static Metadata getInstance(File file) {
+        Reference<Metadata> ref = holder.get();
+        if (ref != null) {
+            Metadata metadata = ref.get();
+            if (metadata != null && metadata.getMetadataFile() != null && metadata.getMetadataFile().equals(file)) {
+                return metadata;
+            }
+            createAndBindNew(file);
+        }
+        return createAndBindNew(file);
+    }
+
+    private static Metadata createAndBindNew(File file) {
         Metadata m = new Metadata(file);
         holder.set(new FinalReference<Metadata>(m));
         return m;
@@ -195,6 +207,9 @@ public class Metadata extends Properties {
      */
     public String getGrailsVersion() {
         return (String) get(APPLICATION_GRAILS_VERSION);
+    }
+    public void setGrailsVersion(String version) {
+        put(APPLICATION_GRAILS_VERSION, version);
     }
 
     /**
@@ -234,10 +249,15 @@ public class Metadata extends Properties {
     public String getServletVersion() {
         String servletVersion = (String) get(SERVLET_VERSION);
         if (servletVersion == null) {
-            servletVersion = System.getProperty(SERVLET_VERSION) != null ? System.getProperty(SERVLET_VERSION) : DEFAULT_SERVLET_VERSION;
+            servletVersion = System.getProperty(SERVLET_VERSION) != null ? System.getProperty(SERVLET_VERSION) : this.servletVersion;
             return servletVersion;
         }
         return servletVersion;
+    }
+
+
+    public void setServletVersion(String servletVersion) {
+        this.servletVersion = servletVersion;
     }
 
     /**
@@ -245,23 +265,20 @@ public class Metadata extends Properties {
      */
     public void persist() {
 
-        if (propertiesHaveNotChanged()) {
+        if (propertiesHaveNotChanged() || metadataFile == null) {
             return;
         }
 
-        if (metadataFile != null) {
-            FileOutputStream out = null;
-
-            try {
-                out = new FileOutputStream(metadataFile);
-                store(out, "Grails Metadata file");
-            }
-            catch (Exception e) {
-                throw new RuntimeException("Error persisting metadata to file ["+metadataFile+"]: " + e.getMessage(), e);
-            }
-            finally {
-                closeQuietly(out);
-            }
+        FileOutputStream out = null;
+        try {
+            out = new FileOutputStream(metadataFile);
+            store(out, "Grails Metadata file");
+        }
+        catch (Exception e) {
+            throw new RuntimeException("Error persisting metadata to file [" + metadataFile + "]: " + e.getMessage(), e);
+        }
+        finally {
+            closeQuietly(out);
         }
     }
 
@@ -269,20 +286,14 @@ public class Metadata extends Properties {
      * @return Returns true if these properties have not changed since they were loaded
      */
     public boolean propertiesHaveNotChanged() {
-        Metadata transientMetadata = this;
-
         Metadata allStringValuesMetadata = new Metadata();
-        Map<Object,Object> transientMap = transientMetadata;
-        for (Map.Entry<Object, Object> entry : transientMap.entrySet()) {
+        for (Map.Entry<Object, Object> entry : entrySet()) {
             if (entry.getValue() != null) {
                 allStringValuesMetadata.put(entry.getKey().toString(), entry.getValue().toString());
             }
         }
 
-        Metadata persistedMetadata = Metadata.reload();
-        boolean result = allStringValuesMetadata.equals(persistedMetadata);
-        holder.set(new SoftReference<Metadata>(transientMetadata));
-        return result;
+        return allStringValuesMetadata.equals(new Metadata(metadataFile));
     }
 
     /**
@@ -305,6 +316,15 @@ public class Metadata extends Properties {
      */
     public boolean isWarDeployed() {
         return warDeployed;
+    }
+
+    @Override
+    public synchronized Object put(Object key, Object o2) {
+        try {
+            return super.put(key, o2);
+        } finally {
+            afterLoading();
+        }
     }
 
     private static void closeQuietly(Closeable c) {

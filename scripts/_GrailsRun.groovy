@@ -13,14 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import org.codehaus.groovy.grails.project.container.*
-import org.codehaus.groovy.grails.cli.ScriptExitException
 import org.codehaus.groovy.grails.cli.interactive.InteractiveMode
 import org.codehaus.groovy.grails.compiler.GrailsProjectWatcher
-
+import org.codehaus.groovy.grails.project.container.GrailsProjectRunner
 
 /**
- * Gant script that executes Grails using an embedded server.
+ * Executes Grails using an embedded server.
  *
  * @author Graeme Rocher
  *
@@ -31,7 +29,6 @@ includeTargets << grailsScript("_GrailsWar")
 
 SCHEME_HTTP = GrailsProjectRunner.SCHEME_HTTP
 SCHEME_HTTPS = GrailsProjectRunner.SCHEME_HTTPS
-
 
 projectRunner = new GrailsProjectRunner(projectPackager, warCreator, classLoader)
 
@@ -51,8 +48,6 @@ recompileFrequency = recompileFrequency ? recompileFrequency.toInteger() : 3
 // Should the reloading agent be enabled? By default, yes...
 isReloading = System.getProperty("grails.reload.enabled")
 isReloading = isReloading != null ? isReloading.toBoolean() : true
-
-shouldPackageTemplates = true
 
 // This isn't used within this script but may come in handy for scripts
 // that depend on this one.
@@ -75,14 +70,14 @@ target(runAppHttps: "Main implementation that executes a Grails application with
 /**
  * Runs the application using the WAR file directly.
  */
-target (runWar : "Main implementation that executes a Grails application WAR") {
+target(runWar: "Main implementation that executes a Grails application WAR") {
     grailsServer = projectRunner.runWar()
 }
 
 /**
  * Runs the application over HTTPS using the WAR file directly.
  */
-target (runWarHttps : "Main implementation that executes a Grails application WAR") {
+target(runWarHttps: "Main implementation that executes a Grails application WAR") {
     grailsServer = projectRunner.runWarHttps()
 }
 
@@ -118,7 +113,7 @@ target(watchContext: "Watches the WEB-INF/classes directory for changes and rest
 
     def im = InteractiveMode.current
     if (!im) {
-        keepServerAlive()        
+        keepServerAlive()
         return
     }
 
@@ -131,8 +126,8 @@ target(watchContext: "Watches the WEB-INF/classes directory for changes and rest
 }
 
 target(keepServerAlive: "Idles the script, ensuring that the server stays running.") {
-    def keepRunning = true
-    def killFile = new File("${basedir}/.kill-run-app")
+    boolean keepRunning = true
+    def killFile = new File(basedir, '.kill-run-app')
     if (killFile.exists()) {
         grailsConsole.warning ".kill-run-app file exists - perhaps a previous server stop didn't work?. Deleting and continuing anyway."
         killFile.delete()
@@ -141,9 +136,8 @@ target(keepServerAlive: "Idles the script, ensuring that the server stays runnin
     while (keepRunning || Boolean.getBoolean("TomcatKillSwitch.active")) {
         sleep(recompileFrequency * 1000)
 
-        // Check whether the kill file exists. This is a hack for the
-        // functional tests so that we can stop the servers that are
-        // started.
+        // Check whether the kill file exists. This is a hack for the functional
+        // tests so that we can stop the servers that are started.
         if (killFile.exists()) {
             grailsConsole.updateStatus "Stopping server..."
             grailsServer.stop()

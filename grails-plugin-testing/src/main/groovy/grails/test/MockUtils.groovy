@@ -1,4 +1,5 @@
-/* Copyright 2008 the original author or authors.
+/*
+ * Copyright 2008 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +17,22 @@ package grails.test
 
 import grails.validation.ValidationException
 import groovy.xml.StreamingMarkupBuilder
+
 import java.beans.Introspector
 import java.beans.PropertyDescriptor
+
 import org.apache.commons.logging.Log
 import org.codehaus.groovy.grails.commons.DefaultGrailsDomainClass
 import org.codehaus.groovy.grails.commons.DomainClassArtefactHandler
 import org.codehaus.groovy.grails.commons.GrailsClassUtils
 import org.codehaus.groovy.grails.commons.GrailsDomainClass
-import org.codehaus.groovy.grails.orm.hibernate.metaclass.BeforeValidateHelper
 import org.codehaus.groovy.grails.plugins.testing.GrailsMockErrors
 import org.codehaus.groovy.grails.plugins.testing.GrailsMockHttpServletRequest
 import org.codehaus.groovy.grails.plugins.testing.GrailsMockHttpServletResponse
 import org.codehaus.groovy.grails.plugins.web.mimes.FormatInterceptor
+import org.codehaus.groovy.grails.validation.ConstrainedProperty
 import org.codehaus.groovy.grails.validation.ConstrainedPropertyBuilder
+import org.codehaus.groovy.grails.validation.DefaultConstraintEvaluator
 import org.codehaus.groovy.grails.validation.GrailsDomainClassValidator
 import org.codehaus.groovy.grails.web.binding.DataBindingLazyMetaPropertyMap
 import org.codehaus.groovy.grails.web.binding.DataBindingUtils
@@ -39,13 +43,10 @@ import org.codehaus.groovy.grails.web.taglib.exceptions.GrailsTagException
 import org.springframework.beans.BeanUtils
 import org.springframework.beans.SimpleTypeConverter
 import org.springframework.mock.web.MockHttpSession
-import org.springframework.validation.BeanPropertyBindingResult
 import org.springframework.validation.Errors
 import org.springframework.validation.FieldError
 import org.springframework.web.context.request.RequestContextHolder
 import org.springframework.web.servlet.ModelAndView
-import org.codehaus.groovy.grails.validation.DefaultConstraintEvaluator
-import org.codehaus.groovy.grails.validation.ConstrainedProperty
 
 /**
  * A utility/helper class for mocking various types of Grails artifacts
@@ -422,11 +423,19 @@ class MockUtils {
      *
      * @deprecated Use {@link #mockDomain(Class, Map, List)}
      */
+    static GrailsDomainClass mockDomain(GrailsDomainClass dc, Class clazz, List testInstances) {
+        mockDomain(dc, clazz, errorsObjects.get(), testInstances)
+    }
+
     static GrailsDomainClass mockDomain(Class clazz, List testInstances) {
-        mockDomain(clazz, errorsObjects.get(), testInstances)
+        mockDomain(null, clazz, testInstances)
     }
 
     static TEST_INSTANCES = [:]
+
+    static GrailsDomainClass mockDomain(Class clazz, Map errorsMap, List testInstances = []) {
+        mockDomain null, clazz, errorsMap, testInstances
+    }
 
     /**
      * <p>Call this to mock the given domain class. It adds mock versions
@@ -436,6 +445,7 @@ class MockUtils {
      * and other query methods return the instances in the same order as
      * they appear in the list <code>testInstances</code>. This makes
      * testing much easier as you can rely on this ordering.</p>
+     * @param dc The optional GrailsDomainClass
      * @param clazz The domain class to mock.
      * @param errorsMap A map that Errors instances will be stored in.
      * Each Errors object will be stored against the domain instance it
@@ -445,8 +455,10 @@ class MockUtils {
      * or of anything that can act as that type, such as a map with keys
      * that match the domain class's fields.
      */
-    static GrailsDomainClass mockDomain(Class clazz, Map errorsMap, List testInstances = []) {
-        def dc = new DefaultGrailsDomainClass(clazz)
+    static GrailsDomainClass mockDomain(GrailsDomainClass dc, Class clazz, Map errorsMap, List testInstances = []) {
+        if (!dc) {
+            dc = new DefaultGrailsDomainClass(clazz)
+        }
 
         def rootInstances = testInstances.findAll { clazz.isInstance(it) }
         def childInstances = testInstances.findAll { clazz.isInstance(it) && it.class != clazz }.groupBy { it.class }
@@ -640,7 +652,6 @@ class MockUtils {
                         case 3: return clazz."findAllBy${method[7..-1]}"(args[0], args[1], args[2]).size()
                         case 4: return clazz."findAllBy${method[7..-1]}"(args[0], args[1], args[2], args[3]).size()
                     }
-
                 }
                 else {
                     throw new MissingMethodException(method, delegate, args)
@@ -752,38 +763,39 @@ class MockUtils {
     private static void addDynamicInstanceMethods(Class clazz, List testInstances) {
         // Add save() method.
         clazz.metaClass.save = { Map args = [:] ->
-            if (validate()) {
-
-                def properties = Introspector.getBeanInfo(clazz).propertyDescriptors
-                def mapping = evaluateMapping(clazz)
-
-                boolean isInsert
-                if (mapping?.id?.generator == "assigned") {
-                    isInsert = !testInstances.contains(delegate)
-                } else {
-                    isInsert = !delegate.id
+            if (!validate()) {
+                if (args.failOnError) {
+                    throw new ValidationException("Validation Error(s) occurred during save()", delegate.errors)
                 }
-
-                if (isInsert) {
-                    triggerEvent delegate, 'beforeInsert'
-                    if (!testInstances.contains(delegate)) {
-                        testInstances << delegate
-                        setId delegate, clazz
-                    }
-                    setTimestamp delegate, 'dateCreated', properties, mapping
-                    setTimestamp delegate, 'lastUpdated', properties, mapping
-                    triggerEvent delegate, 'afterInsert'
-                } else {
-                    triggerEvent delegate, 'beforeUpdate'
-                    setTimestamp delegate, 'lastUpdated', properties, mapping
-                    triggerEvent delegate, 'afterUpdate'
-                }
-
-                return delegate
-            } else if (args.failOnError) {
-                throw new ValidationException("Validation Error(s) occurred during save()", delegate.errors)
+                return null
             }
-            return null
+
+            def properties = Introspector.getBeanInfo(clazz).propertyDescriptors
+            def mapping = evaluateMapping(clazz)
+
+            boolean isInsert
+            if (mapping?.id?.generator == "assigned") {
+                isInsert = !testInstances.contains(delegate)
+            } else {
+                isInsert = !delegate.id
+            }
+
+            if (isInsert) {
+                triggerEvent delegate, 'beforeInsert'
+                if (!testInstances.contains(delegate)) {
+                    testInstances << delegate
+                    setId delegate, clazz
+                }
+                setTimestamp delegate, 'dateCreated', properties, mapping
+                setTimestamp delegate, 'lastUpdated', properties, mapping
+                triggerEvent delegate, 'afterInsert'
+            } else {
+                triggerEvent delegate, 'beforeUpdate'
+                setTimestamp delegate, 'lastUpdated', properties, mapping
+                triggerEvent delegate, 'afterUpdate'
+            }
+
+            return delegate
         }
 
         // Add delete() method.
@@ -793,7 +805,7 @@ class MockUtils {
                     triggerEvent delegate, 'beforeDelete'
                     testInstances.remove(i)
                     triggerEvent delegate, 'afterDelete'
-                    break;
+                    break
                 }
             }
         }
@@ -942,7 +954,7 @@ class MockUtils {
                 // as a linked list. The list starts with the ultimate base class
                 // and ends with "clazz".
                 LinkedList classChain = new LinkedList()
-                while (clazz != Object.class) {
+                while (clazz != Object) {
                     classChain.addFirst(clazz)
                     clazz = clazz.getSuperclass()
                 }
@@ -960,7 +972,7 @@ class MockUtils {
                         try {
                             c.call()
                         } finally {
-                        c.delegate = null
+                            c.delegate = null
                         }
                     }
                 }
@@ -968,7 +980,6 @@ class MockUtils {
                 constrainedProperties = constraintsBuilder.constrainedProperties
             }
         }
-
 
         // Attach the instantiated constraints to the domain/command
         // object.
@@ -1004,8 +1015,6 @@ class MockUtils {
             setErrorsFor(errorsMap, delegate, errors)
         }
         clazz.metaClass.clearErrors = {-> clearErrorsFor(errorsMap, delegate) }
-
-        final beforeValidateHelper = new BeforeValidateHelper()
 
         // Finally add the "validate()" method, which can simply be
         // used to test the constraints or used from code under test.
@@ -1058,10 +1067,19 @@ class MockUtils {
             return !errors.hasErrors()
         }
 
+        def beforeValidateHelper
+        try {
+            def helperClass = Thread.currentThread().contextClassLoader.loadClass('org.grails.datastore.gorm.support.BeforeValidateHelper')
+            beforeValidateHelper = helperClass.newInstance()
+        }
+        catch (ignored) {
+            // Hibernate isn't installed
+        }
+
         // add no-arg attributes validator, just to be inline with what HibernatePluginSupport.addValidationMethods does.
         // It works lke validate(Map) with empty map
         clazz.metaClass.validate = { ->
-            beforeValidateHelper.invokeBeforeValidate delegate, null
+            beforeValidateHelper?.invokeBeforeValidate delegate, null
             validate([:])
         }
 
@@ -1074,7 +1092,7 @@ class MockUtils {
         // add validator that validates only fields that names are passed in input list of fieldsToValdate.
         // All errors for the other fields are removed.
         clazz.metaClass.validate = { List fieldsToValidate ->
-            beforeValidateHelper.invokeBeforeValidate delegate, fieldsToValidate
+            beforeValidateHelper?.invokeBeforeValidate delegate, fieldsToValidate
             if (!validate([:]) && fieldsToValidate != null && !fieldsToValidate.isEmpty()) {
                 def result = new GrailsMockErrors(delegate)
                 for (e in errors.allErrors) {
@@ -1145,7 +1163,7 @@ class MockUtils {
 
             case "InList":
                  if (propValue in args[0]) result << record
-                 break;
+                 break
 
             default:
                 throw new RuntimeException("Unrecognised comparator: ${comparator}")

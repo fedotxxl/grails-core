@@ -13,20 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.test.support
 
 import org.springframework.context.ApplicationContext
+import groovy.transform.CompileStatic
 
+@CompileStatic
 class GrailsTestInterceptor {
 
     private test
-    private mode
-    private appCtx
-    private testClassSuffixes
+    private GrailsTestMode mode
+    private ApplicationContext appCtx
+    private String[] testClassSuffixes
 
-    private transactionInterceptor
-    private requestEnvironmentInterceptor
+    private GrailsTestTransactionInterceptor transactionInterceptor
+    private GrailsTestRequestEnvironmentInterceptor requestEnvironmentInterceptor
 
     GrailsTestInterceptor(Object test, GrailsTestMode mode, ApplicationContext appCtx, String[] testClassSuffixes) {
         this.test = test
@@ -42,7 +43,7 @@ class GrailsTestInterceptor {
     }
 
     void destroy() {
-        transactionInterceptor?.destroy()
+        destroyTransactionIfNecessary()
         requestEnvironmentInterceptor?.destroy()
     }
 
@@ -68,17 +69,15 @@ class GrailsTestInterceptor {
     }
 
     protected destroyTransactionIfNecessary() {
-        if (transactionInterceptor) {
-            transactionInterceptor.destroy()
-            transactionInterceptor = null
-        }
+        transactionInterceptor?.destroy()
+        transactionInterceptor = null
     }
 
     protected getControllerName() {
         ControllerNameExtractor.extractControllerNameFromTestClassName(test.class.name, testClassSuffixes)
     }
 
-    protected initRequestEnvironmentIfNecessary(Closure body) {
+    protected initRequestEnvironmentIfNecessary() {
         if (mode.wrapInRequestEnvironment) {
             requestEnvironmentInterceptor = createRequestEnvironmentInterceptor()
             def controllerName = getControllerName()
@@ -87,10 +86,8 @@ class GrailsTestInterceptor {
     }
 
     protected destroyRequestEnvironmentIfNecessary() {
-        if (requestEnvironmentInterceptor) {
-            requestEnvironmentInterceptor.destroy()
-            requestEnvironmentInterceptor = null
-        }
+        requestEnvironmentInterceptor?.destroy()
+        requestEnvironmentInterceptor = null
     }
 
     protected createAutowirer() {
@@ -104,5 +101,4 @@ class GrailsTestInterceptor {
     protected createRequestEnvironmentInterceptor() {
         new GrailsTestRequestEnvironmentInterceptor(appCtx)
     }
-
 }

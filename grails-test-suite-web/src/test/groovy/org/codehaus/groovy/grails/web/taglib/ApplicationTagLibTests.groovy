@@ -1,11 +1,13 @@
 package org.codehaus.groovy.grails.web.taglib
 
 import grails.util.GrailsUtil
+import grails.util.MockRequestDataValueProcessor
 
 import javax.servlet.http.Cookie
 
 import org.codehaus.groovy.grails.commons.ConfigurationHolder
 import org.codehaus.groovy.grails.plugins.web.taglib.ApplicationTagLib
+import org.codehaus.groovy.grails.support.MockApplicationContext
 import org.codehaus.groovy.grails.web.pages.GroovyPageBinding
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes
 import org.codehaus.groovy.grails.web.taglib.exceptions.GrailsTagException
@@ -13,20 +15,43 @@ import org.springframework.mock.web.MockHttpServletResponse
 
 class ApplicationTagLibTests extends AbstractGrailsTagTests {
 
+    @Override
+    protected void setUp() {
+        super.setUp()
+        appCtx.getBean(ApplicationTagLib.name).requestDataValueProcessor = new MockRequestDataValueProcessor()
+    }
+
     void testResourceTagWithPluginAttribute() {
+        unRegisterRequestDataValueProcessor()
         request.contextPath = '/test'
         def template = '${resource(file:"images/foo.jpg", plugin:"controllers")}'
         assertOutputEquals "/test/plugins/controllers-${GrailsUtil.getGrailsVersion()}/images/foo.jpg", template
     }
 
+    void testResourceTagWithPluginAttributeAndRequestDataValueProcessor() {
+        request.contextPath = '/test'
+        def template = '${resource(file:"images/foo.jpg", plugin:"controllers")}'
+        assertOutputEquals "/test/plugins/controllers-${GrailsUtil.getGrailsVersion()}/images/foo.jpg?requestDataValueProcessorParamName=paramValue", template
+    }
+
     void testResourceTagWithImplicitPlugin() {
+        unRegisterRequestDataValueProcessor()
         def template = '${resource(file:"images/foo.jpg")}'
 
         request.setAttribute(GrailsApplicationAttributes.PAGE_SCOPE, new GroovyPageBinding("/plugin/one"))
         assertOutputEquals "/plugin/one/images/foo.jpg", template
     }
 
+    void testResourceTagWithImplicitPluginAndRequestDataValueProcessor() {
+
+        def template = '${resource(file:"images/foo.jpg")}'
+
+        request.setAttribute(GrailsApplicationAttributes.PAGE_SCOPE, new GroovyPageBinding("/plugin/one"))
+        assertOutputEquals "/plugin/one/images/foo.jpg?requestDataValueProcessorParamName=paramValue", template
+    }
+
     void testResourceTagWithContextPathAttribute() {
+        unRegisterRequestDataValueProcessor()
         request.contextPath = '/test'
         def template = '${resource(file:"images/foo.jpg", contextPath:"/foo")}'
         assertOutputEquals "/foo/images/foo.jpg", template
@@ -35,13 +60,30 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         assertOutputEquals "/foo/images/foo.jpg", template
     }
 
+    void testResourceTagWithContextPathAttributeAndRequestDataValueProcessor() {
+        request.contextPath = '/test'
+        def template = '${resource(file:"images/foo.jpg", contextPath:"/foo")}'
+        assertOutputEquals "/foo/images/foo.jpg?requestDataValueProcessorParamName=paramValue", template
+
+        request.setAttribute(GrailsApplicationAttributes.PAGE_SCOPE, new GroovyPageBinding("/plugin/one"))
+        assertOutputEquals "/foo/images/foo.jpg?requestDataValueProcessorParamName=paramValue", template
+    }
+
     void testResourceTagWithPluginAttributeAndNone() {
+        unRegisterRequestDataValueProcessor()
         request.contextPath = '/test'
         def template = '${resource(file:"images/foo.jpg", plugin:"none")}'
         assertOutputEquals "/test/images/foo.jpg", template
     }
 
+    void testResourceTagWithPluginAttributeAndNoneAndRequestDataValueProcessor() {
+        request.contextPath = '/test'
+        def template = '${resource(file:"images/foo.jpg", plugin:"none")}'
+        assertOutputEquals "/test/images/foo.jpg?requestDataValueProcessorParamName=paramValue", template
+    }
+
     void testResourceTag() {
+        unRegisterRequestDataValueProcessor()
         request.contextPath = '/test'
         def template = '${resource(file:"images/foo.jpg")}'
         assertOutputEquals '/test/images/foo.jpg', template
@@ -50,16 +92,33 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         assertOutputEquals '/test/images/foo.jpg', template
     }
 
+    void testResourceTagAndRequestDataValueProcessor() {
+        request.contextPath = '/test'
+        def template = '${resource(file:"images/foo.jpg")}'
+        assertOutputEquals '/test/images/foo.jpg?requestDataValueProcessorParamName=paramValue', template
+
+        template = '${resource(dir:"images",file:"foo.jpg")}'
+        assertOutputEquals '/test/images/foo.jpg?requestDataValueProcessorParamName=paramValue', template
+    }
+
     void testResourceTagDirOnly() {
+        unRegisterRequestDataValueProcessor()
         request.contextPath = '/test'
         def template = '${resource(dir:"jquery")}'
         assertOutputEquals '/test/jquery', template
     }
 
+    void testResourceTagDirOnlyAndRequestDataValueProcessor() {
+        request.contextPath = '/test'
+        def template = '${resource(dir:"jquery")}'
+        assertOutputEquals '/test/jquery?requestDataValueProcessorParamName=paramValue', template
+    }
+
     void testUseJessionIdWithCreateLink() {
+        unRegisterRequestDataValueProcessor()
         def response = new JsessionIdMockHttpServletResponse()
         ApplicationTagLib.metaClass.getResponse = {-> response}
-        def tagLibBean = appCtx.getBean("org.codehaus.groovy.grails.plugins.web.taglib.ApplicationTagLib")
+        def tagLibBean = appCtx.getBean(ApplicationTagLib.name)
         ga.config.grails.views.enable.jsessionid=true
         tagLibBean.afterPropertiesSet()
         assertTrue(tagLibBean.@useJsessionId)
@@ -71,6 +130,24 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         tagLibBean.afterPropertiesSet()
         assertFalse(tagLibBean.@useJsessionId)
         assertOutputEquals "/foo/test", template
+    }
+
+    void testUseJessionIdWithCreateLinkAndRequestDataValueProcessor() {
+
+        def response = new JsessionIdMockHttpServletResponse()
+        ApplicationTagLib.metaClass.getResponse = {-> response}
+        def tagLibBean = appCtx.getBean(ApplicationTagLib.name)
+        ga.config.grails.views.enable.jsessionid=true
+        tagLibBean.afterPropertiesSet()
+        assertTrue(tagLibBean.@useJsessionId)
+
+        def template = '<g:createLink controller="foo" action="test" />'
+        assertOutputEquals "/foo/test?requestDataValueProcessorParamName=paramValue;jsessionid=test", template
+
+        ga.config.grails.views.enable.jsessionid=false
+        tagLibBean.afterPropertiesSet()
+        assertFalse(tagLibBean.@useJsessionId)
+        assertOutputEquals "/foo/test?requestDataValueProcessorParamName=paramValue", template
     }
 
     void testObtainCookieValue() {
@@ -94,74 +171,150 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
     }
 
     void testClonedUrlFromVariable() {
+        unRegisterRequestDataValueProcessor()
         def template = '''<g:set var="urlMap" value="${[controller: 'test', action: 'justdoit']}"/>${urlMap.controller},${urlMap.action}<g:link url="${urlMap}">test</g:link>${urlMap.controller},${urlMap.action}'''
         assertOutputEquals('test,justdoit<a href="/test/justdoit">test</a>test,justdoit', template)
     }
 
     void testLinkWithMultipleParameters() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:link controller="foo" action="action" params="[test: \'test\', test2: \'test2\']">test</g:link>'
         assertOutputEquals('<a href="/foo/action?test=test&amp;test2=test2">test</a>', template)
         // test caching too
         assertOutputEquals('<a href="/foo/action?test=test&amp;test2=test2">test</a>', template)
     }
 
+    void testLinkWithMultipleParametersAndRequestDataValueProcessor() {
+        def template = '<g:link controller="foo" action="action" params="[test: \'test\', test2: \'test2\']">test</g:link>'
+        assertOutputEquals('<a href="/foo/action?test=test&amp;test2=test2&amp;requestDataValueProcessorParamName=paramValue">test</a>', template)
+        // test caching too
+        assertOutputEquals('<a href="/foo/action?test=test&amp;test2=test2&amp;requestDataValueProcessorParamName=paramValue">test</a>', template)
+    }
+
     void testLinkWithMultipleCollectionParameters() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:link controller="foo" action="action" params="[test: [\'test-a\',\'test-b\'], test2: [\'test2-a\',\'test2-b\'] as String[]]">test</g:link>'
         assertOutputEquals('<a href="/foo/action?test=test-a&amp;test=test-b&amp;test2=test2-a&amp;test2=test2-b">test</a>', template)
         // test caching too
         assertOutputEquals('<a href="/foo/action?test=test-a&amp;test=test-b&amp;test2=test2-a&amp;test2=test2-b">test</a>', template)
     }
 
+    void testLinkWithMultipleCollectionParametersAndRequestDataValueProcessor() {
+        def template = '<g:link controller="foo" action="action" params="[test: [\'test-a\',\'test-b\'], test2: [\'test2-a\',\'test2-b\'] as String[]]">test</g:link>'
+        assertOutputEquals('<a href="/foo/action?test=test-a&amp;test=test-b&amp;test2=test2-a&amp;test2=test2-b&amp;requestDataValueProcessorParamName=paramValue">test</a>', template)
+        // test caching too
+        assertOutputEquals('<a href="/foo/action?test=test-a&amp;test=test-b&amp;test2=test2-a&amp;test2=test2-b&amp;requestDataValueProcessorParamName=paramValue">test</a>', template)
+    }
+
     void testLinkWithCollectionParameter() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:link controller="foo" action="action" params="[test: [\'test-a\']]">test</g:link>'
         assertOutputEquals('<a href="/foo/action?test=test-a">test</a>', template)
         // test caching too
         assertOutputEquals('<a href="/foo/action?test=test-a">test</a>', template)
     }
 
+    void testLinkWithCollectionParameterAndRequestDataValueProcessor() {
+        def template = '<g:link controller="foo" action="action" params="[test: [\'test-a\']]">test</g:link>'
+        assertOutputEquals('<a href="/foo/action?test=test-a&amp;requestDataValueProcessorParamName=paramValue">test</a>', template)
+        // test caching too
+        assertOutputEquals('<a href="/foo/action?test=test-a&amp;requestDataValueProcessorParamName=paramValue">test</a>', template)
+    }
+
     void testLinkWithCharCollectionParameter() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:link controller="foo" action="action" params="[letter: [\'a\' as char]]">test</g:link>'
         assertOutputEquals('<a href="/foo/action?letter=a">test</a>', template)
         // test caching too
         assertOutputEquals('<a href="/foo/action?letter=a">test</a>', template)
     }
+    void testLinkWithCharCollectionParameterAndRequestDataValueProcessor() {
+        def template = '<g:link controller="foo" action="action" params="[letter: [\'a\' as char]]">test</g:link>'
+        assertOutputEquals('<a href="/foo/action?letter=a&amp;requestDataValueProcessorParamName=paramValue">test</a>', template)
+        // test caching too
+        assertOutputEquals('<a href="/foo/action?letter=a&amp;requestDataValueProcessorParamName=paramValue">test</a>', template)
+    }
 
     void testCreateLinkWithCollectionParameter() {
+        unRegisterRequestDataValueProcessor()
         def template = '<% l=\'a\' %>${g.createLink(controller:"foo", action:"action", params:[letter:[l]])} ${g.createLink(controller:"foo", action:"action", params:[letter:[l]])}'
         assertOutputEquals('/foo/action?letter=a /foo/action?letter=a', template)
         // test caching too
         assertOutputEquals('/foo/action?letter=a /foo/action?letter=a', template)
     }
 
+    void testCreateLinkWithCollectionParameterAndRequestDataValueProcessor() {
+        def template = '<% l=\'a\' %>${g.createLink(controller:"foo", action:"action", params:[letter:[l]])} ${g.createLink(controller:"foo", action:"action", params:[letter:[l]])}'
+        assertOutputEquals('/foo/action?letter=a&amp;requestDataValueProcessorParamName=paramValue /foo/action?letter=a&amp;requestDataValueProcessorParamName=paramValue', template)
+        // test caching too
+        assertOutputEquals('/foo/action?letter=a&amp;requestDataValueProcessorParamName=paramValue /foo/action?letter=a&amp;requestDataValueProcessorParamName=paramValue', template)
+    }
+
     void testLikeWithElementId() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:link elementId="myId" controller="foo" action="list">bar</g:link>'
         assertOutputEquals('<a href="/foo/list" id="myId">bar</a>', template)
     }
 
+    void testLikeWithElementIdAndRequestDataValueProcessor() {
+        def template = '<g:link elementId="myId" controller="foo" action="list">bar</g:link>'
+        assertOutputEquals('<a href="/foo/list?requestDataValueProcessorParamName=paramValue" id="myId">bar</a>', template)
+    }
+
     void testLinkWithMultipleParametersAndElementId() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:link elementId="myid" controller="foo" action="action" params="[test: \'test\', test2: \'test2\']">test</g:link>'
         assertOutputEquals('<a href="/foo/action?test=test&amp;test2=test2" id="myid">test</a>', template)
     }
 
+    void testLinkWithMultipleParametersAndElementIdAndRequestDataValueProcessor() {
+        def template = '<g:link elementId="myid" controller="foo" action="action" params="[test: \'test\', test2: \'test2\']">test</g:link>'
+        assertOutputEquals('<a href="/foo/action?test=test&amp;test2=test2&amp;requestDataValueProcessorParamName=paramValue" id="myid">test</a>', template)
+    }
+
     void testLinkWithFragment() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:link controller="foo" action="bar" fragment="test">link</g:link>'
         profile("link rendering") {
             assertOutputEquals('<a href="/foo/bar#test">link</a>', template)
         }
     }
 
+   void testLinkWithFragmentAndRequestDataValueProcessor() {
+        def template = '<g:link controller="foo" action="bar" fragment="test">link</g:link>'
+        profile("link rendering") {
+            assertOutputEquals('<a href="/foo/bar?requestDataValueProcessorParamName=paramValue#test">link</a>', template)
+        }
+    }
+
     void testCreateLinkWithFlowExecutionKeyAndEvent() {
+        unRegisterRequestDataValueProcessor()
         request.flowExecutionKey = '12345'
 
         def template = '<g:createLink controller="foo" action="bar" event="boo" />'
         assertOutputEquals('/foo/bar?execution=12345&_eventId=boo', template)
     }
 
+    void testCreateLinkWithFlowExecutionKeyAndEventAndRequestDataValueProcessor() {
+        request.flowExecutionKey = '12345'
+
+        def template = '<g:createLink controller="foo" action="bar" event="boo" />'
+        assertOutputEquals('/foo/bar?execution=12345&_eventId=boo&requestDataValueProcessorParamName=paramValue', template)
+    }
+
     void testLinkWithFlowExecutionKeyAndEvent() {
+        unRegisterRequestDataValueProcessor()
         request.flowExecutionKey = '12345'
 
         def template = '<g:link controller="foo" action="bar" event="boo" >link</g:link>'
         assertOutputEquals('<a href="/foo/bar?execution=12345&amp;_eventId=boo">link</a>', template)
+    }
+
+    void testLinkWithFlowExecutionKeyAndEventAndRequestDataValueProcessor() {
+        request.flowExecutionKey = '12345'
+
+        def template = '<g:link controller="foo" action="bar" event="boo" >link</g:link>'
+        assertOutputEquals('<a href="/foo/bar?execution=12345&amp;_eventId=boo&amp;requestDataValueProcessorParamName=paramValue">link</a>', template)
     }
 
     void testSetTag() {
@@ -184,7 +337,6 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         def template = '<g:set var="var1" value="1"/>${var1}<g:set var="var1" value="2"/> ${var1}<g:set var="var2" value="3" scope="request"/> ${var2}<g:set var="var2" value="4" scope="request"/> ${var2}'
         assertOutputEquals('1 2 3 4', template)
     }
-
 
     void testSetTagWithBeanName() {
         def template = '<g:set bean="grailsApplication" var="myVar"/>${myVar.initialised}'
@@ -213,22 +365,43 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
     }
 
     void testCreateLinkToWithDirAndLeadingSlash() {
+        unRegisterRequestDataValueProcessor()
         request.contextPath = "/"
         def template = '<g:createLinkTo dir="/images" file="foo.jpg" />'
         assertOutputEquals "/images/foo.jpg", template
     }
 
+    void testCreateLinkToWithDirAndLeadingSlashAndRequestDataValueProcessor() {
+        request.contextPath = "/"
+        def template = '<g:createLinkTo dir="/images" file="foo.jpg" />'
+        assertOutputEquals "/images/foo.jpg?requestDataValueProcessorParamName=paramValue", template
+    }
+
     void testCreateLinkToWithDirAndLeadingNoLeadingSlash() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:createLinkTo dir="images" file="foo.jpg" />'
         assertOutputEquals "/images/foo.jpg", template
     }
 
+    void testCreateLinkToWithDirAndLeadingNoLeadingSlashAndRequestDataValueProcessor() {
+        def template = '<g:createLinkTo dir="images" file="foo.jpg" />'
+        assertOutputEquals "/images/foo.jpg?requestDataValueProcessorParamName=paramValue", template
+    }
+
     void testCreateLinkToWithFileAndLeadingSlash() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:createLinkTo dir="/images" file="/foo.jpg" />'
         assertOutputEquals "/images/foo.jpg", template
     }
 
+    void testCreateLinkToWithFileAndLeadingSlashAndRequestDataValueProcessor() {
+        def template = '<g:createLinkTo dir="/images" file="/foo.jpg" />'
+        assertOutputEquals "/images/foo.jpg?requestDataValueProcessorParamName=paramValue", template
+    }
+
     void testCreateLinkTo() {
+
+        unRegisterRequestDataValueProcessor()
 
         def template = '<g:resource dir="test" />'
         assertOutputEquals '/test', template
@@ -240,39 +413,87 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         assertOutputEquals '', template
     }
 
+    void testCreateLinkToWithRequestDataValueProcessor() {
+        def template = '<g:resource dir="test" />'
+        assertOutputEquals '/test?requestDataValueProcessorParamName=paramValue', template
+
+        template = '<g:resource dir="test" file="file" />'
+        assertOutputEquals '/test/file?requestDataValueProcessorParamName=paramValue', template
+
+        template = '<g:resource dir="" />'
+        assertOutputEquals '', template
+    }
+
     void testCreateLinkToFilesInRoot() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:resource dir="/" file="test.gsp" />'
         assertOutputEquals '/test.gsp', template
     }
 
+    void testCreateLinkToFilesInRootWithRequestDataValueProcessor() {
+        def template = '<g:resource dir="/" file="test.gsp" />'
+        assertOutputEquals '/test.gsp?requestDataValueProcessorParamName=paramValue', template
+    }
+
     void testResourceFilesInRootWithContext() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:resource dir="/" file="test.gsp" />'
         request.contextPath = "/foo"
         assertOutputEquals '/foo/test.gsp', template
     }
 
+    void testResourceFilesInRootWithContextAndRequestDataValueProcessor() {
+        def template = '<g:resource dir="/" file="test.gsp" />'
+        request.contextPath = "/foo"
+        assertOutputEquals '/foo/test.gsp?requestDataValueProcessorParamName=paramValue', template
+    }
+
     void testCreateLinkWithZeroId() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:createLink action="testAction" controller="testController" id="${id}"  />'
         assertOutputEquals '/testController/testAction/0', template, [id:0]
     }
 
+    void testCreateLinkWithZeroIdAndRequestDataValueProcessor() {
+        def template = '<g:createLink action="testAction" controller="testController" id="${id}"  />'
+        assertOutputEquals '/testController/testAction/0?requestDataValueProcessorParamName=paramValue', template, [id:0]
+    }
+
     void testCreateLinkURLEncoding() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:createLink action="testAction" controller="testController" params="[name:\'Marc Palmer\']"  />'
         assertOutputEquals '/testController/testAction?name=Marc+Palmer', template
     }
 
+    void testCreateLinkURLEncodingWithRequestDataValueProcessor() {
+        def template = '<g:createLink action="testAction" controller="testController" params="[name:\'Marc Palmer\']"  />'
+        assertOutputEquals '/testController/testAction?name=Marc+Palmer&requestDataValueProcessorParamName=paramValue', template
+    }
+
     void testCreateLinkURLEncodingWithHTMLChars() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:createLink action="testAction" controller="testController" params="[email:email]" />'
         assertOutputEquals '/testController/testAction?email=%3Cmarc%40anyware.co.uk%3E', template, [email:'<marc@anyware.co.uk>']
     }
 
+    void testCreateLinkURLEncodingWithHTMLCharsAndRequestDataValueProcessor() {
+        def template = '<g:createLink action="testAction" controller="testController" params="[email:email]" />'
+        assertOutputEquals '/testController/testAction?email=%3Cmarc%40anyware.co.uk%3E&requestDataValueProcessorParamName=paramValue', template, [email:'<marc@anyware.co.uk>']
+    }
+
     void testCreateLinkWithBase() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:createLink base="http://www128.myhost.com:3495" action="testAction" controller="testController" />'
         assertOutputEquals 'http://www128.myhost.com:3495/testController/testAction', template
     }
 
-    void testCreateLinkWithUseJSessionIdAndContextPapth() {
+    void testCreateLinkWithBaseAndRequestDataValueProcessor() {
+        def template = '<g:createLink base="http://www128.myhost.com:3495" action="testAction" controller="testController" />'
+        assertOutputEquals 'http://www128.myhost.com:3495/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+    }
 
+    void testCreateLinkWithUseJSessionIdAndContextPapth() {
+        unRegisterRequestDataValueProcessor()
         request.contextPath = "/foo"
         def taglib = appCtx.getBean(ApplicationTagLib.name)
 
@@ -281,13 +502,30 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         assertOutputEquals '/foo/testController/testAction', template
     }
 
+    void testCreateLinkWithUseJSessionIdAndContextPapthAndRequestDataValueProcessor() {
+        request.contextPath = "/foo"
+        def taglib = appCtx.getBean(ApplicationTagLib.name)
+
+        taglib.useJsessionId = true
+        def template = '<g:createLink action="testAction" controller="testController" />'
+        assertOutputEquals '/foo/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+    }
+
     void testCreateLinkWithContextPath() {
+        unRegisterRequestDataValueProcessor()
         request.contextPath = "/foo"
         def template = '<g:createLink action="testAction" controller="testController" />'
         assertOutputEquals '/foo/testController/testAction', template
     }
 
+    void testCreateLinkWithContextPathAndRequestDataValueProcessor() {
+        request.contextPath = "/foo"
+        def template = '<g:createLink action="testAction" controller="testController" />'
+        assertOutputEquals '/foo/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+    }
+
     void testAbsoluteWithContextPath() {
+        unRegisterRequestDataValueProcessor()
         request.contextPath = "/foo"
         def template = '<g:createLink action="testAction" controller="testController" absolute="true" />'
 
@@ -300,9 +538,25 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         linkGenerator = appCtx.getBean("grailsLinkGenerator")
         linkGenerator.configuredServerBaseURL="http://www.mysite.com"
         assertOutputEquals 'http://www.mysite.com/testController/testAction', template
+    }
+
+    void testAbsoluteWithContextPathAndRequestDataValueProcessor() {
+        request.contextPath = "/foo"
+        def template = '<g:createLink action="testAction" controller="testController" absolute="true" />'
+
+        def linkGenerator = appCtx.getBean("grailsLinkGenerator")
+        linkGenerator.configuredServerBaseURL="http://www.mysite.com"
+        assertOutputEquals 'http://www.mysite.com/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+
+        template = '<g:createLink action="testAction" controller="testController" absolute="${true}" />'
+
+        linkGenerator = appCtx.getBean("grailsLinkGenerator")
+        linkGenerator.configuredServerBaseURL="http://www.mysite.com"
+        assertOutputEquals 'http://www.mysite.com/testController/testAction?requestDataValueProcessorParamName=paramValue', template
     }
 
     void testAbsoluteFalseWithContextPath() {
+        unRegisterRequestDataValueProcessor()
         request.contextPath = "/foo"
         def template = '<g:createLink action="testAction" controller="testController" absolute="false" />'
 
@@ -317,7 +571,23 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         assertOutputEquals '/foo/testController/testAction', template
     }
 
+    void testAbsoluteFalseWithContextPathAndRequestDataValueProcessor() {
+        request.contextPath = "/foo"
+        def template = '<g:createLink action="testAction" controller="testController" absolute="false" />'
+
+        def linkGenerator = appCtx.getBean("grailsLinkGenerator")
+        linkGenerator.configuredServerBaseURL="http://www.mysite.com"
+        assertOutputEquals '/foo/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+
+        template = '<g:createLink action="testAction" controller="testController" absolute="${false}" />'
+
+        linkGenerator = appCtx.getBean("grailsLinkGenerator")
+        linkGenerator.configuredServerBaseURL="http://www.mysite.com"
+        assertOutputEquals '/foo/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+    }
+
     void testAbsoluteWithContextPathAndNullConfig() {
+        unRegisterRequestDataValueProcessor()
         ConfigurationHolder.config = null
         request.contextPath = "/foo"
         request.serverPort = 8080
@@ -328,7 +598,19 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         assertOutputEquals 'http://localhost:8080/foo/testController/testAction', template
     }
 
+    void testAbsoluteWithContextPathAndNullConfigAndRequestDataValueProcessor() {
+        ConfigurationHolder.config = null
+        request.contextPath = "/foo"
+        request.serverPort = 8080
+        def template = '<g:createLink action="testAction" controller="testController" absolute="true" />'
+        assertOutputEquals 'http://localhost:8080/foo/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+
+        template = '<g:createLink action="testAction" controller="testController" absolute="${true}" />'
+        assertOutputEquals 'http://localhost:8080/foo/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+    }
+
     void testAbsoluteFalseWithContextPathAndNullConfig() {
+        unRegisterRequestDataValueProcessor()
         ConfigurationHolder.config = null
         request.contextPath = "/foo"
         request.serverPort = 8080
@@ -337,6 +619,17 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
 
         template = '<g:createLink action="testAction" controller="testController" absolute="${false}" />'
         assertOutputEquals '/foo/testController/testAction', template
+    }
+
+    void testAbsoluteFalseWithContextPathAndNullConfigAndRequestDataValueProcessor() {
+        ConfigurationHolder.config = null
+        request.contextPath = "/foo"
+        request.serverPort = 8080
+        def template = '<g:createLink action="testAction" controller="testController" absolute="false" />'
+        assertOutputEquals '/foo/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+
+        template = '<g:createLink action="testAction" controller="testController" absolute="${false}" />'
+        assertOutputEquals '/foo/testController/testAction?requestDataValueProcessorParamName=paramValue', template
     }
 
     /**
@@ -345,11 +638,18 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
      * if "base" is set to an empty string.
      */
     void testCreateLinkWithNoContextPath() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:createLink base="" action="testAction" controller="testController" />'
         assertOutputEquals '/testController/testAction', template
     }
 
+    void testCreateLinkWithNoContextPathAndRequestDataValueProcessor() {
+        def template = '<g:createLink base="" action="testAction" controller="testController" />'
+        assertOutputEquals '/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+    }
+
     void testCreateLinkWithAbsolute() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:createLink absolute="true" action="testAction" controller="testController" />'
         request.serverPort = 8080
         assertOutputEquals 'http://localhost:8080/testController/testAction', template
@@ -359,7 +659,18 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         assertOutputEquals 'http://localhost:8080/testController/testAction', template
     }
 
+    void testCreateLinkWithAbsoluteAndRequestDataValueProcessor() {
+        def template = '<g:createLink absolute="true" action="testAction" controller="testController" />'
+        request.serverPort = 8080
+        assertOutputEquals 'http://localhost:8080/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+
+        template = '<g:createLink absolute="${true}" action="testAction" controller="testController" />'
+        request.serverPort = 8080
+        assertOutputEquals 'http://localhost:8080/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+    }
+
     void testCreateLinkWithAbsoluteFalse() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:createLink absolute="false" action="testAction" controller="testController" />'
         request.serverPort = 8080
         assertOutputEquals '/testController/testAction', template
@@ -367,6 +678,16 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         template = '<g:createLink absolute="${false}" action="testAction" controller="testController" />'
         request.serverPort = 8080
         assertOutputEquals '/testController/testAction', template
+    }
+
+    void testCreateLinkWithAbsoluteFalseAndRequestDataValueProcessor() {
+        def template = '<g:createLink absolute="false" action="testAction" controller="testController" />'
+        request.serverPort = 8080
+        assertOutputEquals '/testController/testAction?requestDataValueProcessorParamName=paramValue', template
+
+        template = '<g:createLink absolute="${false}" action="testAction" controller="testController" />'
+        request.serverPort = 8080
+        assertOutputEquals '/testController/testAction?requestDataValueProcessorParamName=paramValue', template
     }
 
     void testJoinStrings() {
@@ -398,6 +719,7 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
     }
 
     void testImg() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:img dir="images" file="logo.png" width="100" height="200"/>'
         assertOutputEquals '<img src="/images/logo.png" width="100" height="200" />', template
 
@@ -405,7 +727,16 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         assertOutputEquals '<img src="/images/logo.png" width="100" height="200" />', template
     }
 
+    void testImgWithRequestDataValueProcessor() {
+        def template = '<g:img dir="images" file="logo.png" width="100" height="200"/>'
+        assertOutputEquals '<img src="/images/logo.png?requestDataValueProcessorParamName=paramValue" width="100" height="200" />', template
+
+        template = '<g:img file="logo.png" width="100" height="200"/>'
+        assertOutputEquals '<img src="/images/logo.png?requestDataValueProcessorParamName=paramValue" width="100" height="200" />', template
+    }
+
     void testExternal() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:external uri="/js/main.js"/>'
         assertOutputEquals '<script src="/js/main.js" type="text/javascript"></script>\r\n', template
 
@@ -419,8 +750,21 @@ class ApplicationTagLibTests extends AbstractGrailsTagTests {
         assertOutputEquals '<link href="/images/icons/iphone-icon.png" rel="apple-touch-icon"/>\r\n', template
     }
 
-    void testGRAILS9742() {
-        def template = '<g:createLink controller="foo" action="bar" id="|prop:8888" />'
-        assertOutputEquals '/foo/bar/%7Cprop%3A8888', template
+    void testExternalWithRequestDataValueProcessor() {
+        def template = '<g:external uri="/js/main.js"/>'
+        assertOutputEquals '<script src="/js/main.js?requestDataValueProcessorParamName=paramValue" type="text/javascript"></script>\r\n', template
+
+        template = '<g:external uri="/css/style.css"/>'
+        assertOutputEquals '<link href="/css/style.css?requestDataValueProcessorParamName=paramValue" type="text/css" rel="stylesheet" media="screen, projector"/>\r\n', template
+
+        template = '<g:external uri="/css/print.css" media="print"/>'
+        assertOutputEquals '<link href="/css/print.css?requestDataValueProcessorParamName=paramValue" type="text/css" rel="stylesheet" media="print"/>\r\n', template
+
+        template = '<g:external uri="/images/icons/iphone-icon.png" type="appleicon"/>'
+        assertOutputEquals '<link href="/images/icons/iphone-icon.png?requestDataValueProcessorParamName=paramValue" rel="apple-touch-icon"/>\r\n', template
+    }
+
+    private void unRegisterRequestDataValueProcessor() {
+        appCtx.getBean(ApplicationTagLib.name).requestDataValueProcessor = null
     }
 }

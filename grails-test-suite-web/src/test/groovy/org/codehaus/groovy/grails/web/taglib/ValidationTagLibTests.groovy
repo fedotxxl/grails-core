@@ -64,8 +64,6 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
         parsePhoneDomainTestClasses()
     }
 
-
-
     void testFieldValueWithClassAndPropertyNameLookupFromBundle() {
         def domain = ga.getDomainClass("ValidationTagLibBook")
 
@@ -113,7 +111,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
         assertOutputEquals '', template, [book:b]
         assertOutputEquals '', template, [book:domain.newInstance()]
     }
-    
+
     void testFieldValueHtmlEscaping() {
         def b = ga.getDomainClass("ValidationTagLibBook").newInstance()
         b.properties = [title:"<script>alert('escape me')</script>"]
@@ -124,7 +122,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
         assertOutputEquals(expected, template, [book:b])
         assertOutputEquals(expected, htmlCodecDirective + template, [book:b])
     }
-    
+
     void testFieldValueHtmlEscapingWithFunctionSyntaxCall() {
         def b = ga.getDomainClass("ValidationTagLibBook").newInstance()
         b.properties = [title:"<script>alert('escape me')</script>"]
@@ -143,12 +141,12 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
         def template = '''${fieldValue(bean:book, field:"title")}'''
         def htmlCodecDirective = '<%@page defaultCodec="HTML" %>'
         def expected = "&lt;script&gt;alert(&#39;escape me&#39;)&lt;/script&gt;"
-        
+
         def resourceLoader = new MockStringResourceLoader()
         resourceLoader.registerMockResource('/_sometemplate.gsp', htmlCodecDirective + template)
         resourceLoader.registerMockResource('/_sometemplate_nocodec.gsp', template)
         appCtx.groovyPagesTemplateEngine.groovyPageLocator.addResourceLoader(resourceLoader)
-        
+
         assertOutputEquals(expected, '<g:render template="/sometemplate" model="[book:book]" />', [book:b])
         assertOutputEquals(expected + expected, template + '<g:render template="/sometemplate" model="[book:book]" />', [book:b])
         assertOutputEquals(expected + expected, htmlCodecDirective + template + '<g:render template="/sometemplate" model="[book:book]" />', [book:b])
@@ -161,7 +159,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
         assertOutputEquals(expected + expected, '<g:render template="/sometemplate_nocodec" model="[book:book]" />' + template, [book:b])
         assertOutputEquals(expected + expected, htmlCodecDirective + '<g:render template="/sometemplate_nocodec" model="[book:book]" />' + template, [book:b])
     }
-    
+
     void testFieldValueTag() {
         def b = ga.getDomainClass("ValidationTagLibBook").newInstance()
         b.properties = [publisherURL:"a_bad_url"]
@@ -391,14 +389,14 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
             def attrs = [:]
             tag.call(attrs, { "error found"})
 
-            assertEquals "error found", sw.toString()
         }
+        assertEquals "error found", sw.toString()
     }
-    
+
     void testMessageHtmlEscaping() {
         def b = ga.getDomainClass("ValidationTagLibBook").newInstance()
         b.properties = [title:"<script>alert('escape me')</script>"]
-        
+
         messageSource.addMessage("default.show.label", Locale.ENGLISH, ">{0}<")
 
         def template = '''<title><g:message code="default.show.label" args="[book.title]" /></title>'''
@@ -407,7 +405,20 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
         assertOutputEquals(expected, template, [book:b])
         assertOutputEquals(expected, htmlCodecDirective + template, [book:b])
     }
-    
+
+    void testMessageRawEncodeAs() {
+        def b = ga.getDomainClass("ValidationTagLibBook").newInstance()
+        b.properties = [title:"<b>bold</b> is ok"]
+
+        messageSource.addMessage("default.show.label", Locale.ENGLISH, ">{0}<")
+
+        def template = '''<title><g:message code="default.show.label" args="[book.title]" encodeAs="raw"/></title>'''
+        def htmlCodecDirective = '<%@page defaultCodec="HTML" %>'
+        def expected = "<title>><b>bold</b> is ok<</title>"
+        assertOutputEquals(expected, template, [book:b])
+        assertOutputEquals(expected, htmlCodecDirective + template, [book:b])
+    }
+
     void testMessageNoneEncodeAs() {
         def b = ga.getDomainClass("ValidationTagLibBook").newInstance()
         b.properties = [title:"<b>bold</b> is ok"]
@@ -424,7 +435,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
     void testMessageHtmlEscapingWithFunctionSyntaxCall() {
         def b = ga.getDomainClass("ValidationTagLibBook").newInstance()
         b.properties = [title:"<script>alert('escape me')</script>"]
-        
+
         messageSource.addMessage("default.show.label", Locale.ENGLISH, "{0}")
 
         def template = '''<title>${g.message([code:"default.show.label", args:[book.title]])}</title>'''
@@ -437,18 +448,18 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
     void testMessageHtmlEscapingDifferentEncodings() {
         def b = ga.getDomainClass("ValidationTagLibBook").newInstance()
         b.properties = [title:"<script>alert('escape me')</script>"]
-        
+
         messageSource.addMessage("default.show.label", Locale.ENGLISH, "{0}")
 
         def template = '''<title>${g.message([code:"default.show.label", args:[book.title]])}</title>'''
         def htmlCodecDirective = '<%@page defaultCodec="HTML" %>'
         def expected = "<title>&lt;script&gt;alert(&#39;escape me&#39;)&lt;/script&gt;</title>"
-        
+
         def resourceLoader = new MockStringResourceLoader()
         resourceLoader.registerMockResource('/_sometemplate.gsp', htmlCodecDirective + template)
         resourceLoader.registerMockResource('/_sometemplate_nocodec.gsp', template)
         appCtx.groovyPagesTemplateEngine.groovyPageLocator.addResourceLoader(resourceLoader)
-        
+
         assertOutputEquals(expected, '<g:render template="/sometemplate" model="[book:book]" />', [book:b])
         assertOutputEquals(expected + expected, template + '<g:render template="/sometemplate" model="[book:book]" />', [book:b])
         assertOutputEquals(expected + expected, htmlCodecDirective + template + '<g:render template="/sometemplate" model="[book:book]" />', [book:b])
@@ -461,7 +472,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
         assertOutputEquals(expected + expected, '<g:render template="/sometemplate_nocodec" model="[book:book]" />' + template, [book:b])
         assertOutputEquals(expected + expected, htmlCodecDirective + '<g:render template="/sometemplate_nocodec" model="[book:book]" />' + template, [book:b])
     }
-    
+
     void testMessageTagWithError() {
         def error = new FieldError("foo", "bar",1, false, ["my.error.code"] as String[], null, "This is default")
         def template = '<g:message error="${error}" />'
@@ -477,7 +488,6 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
 
         assertOutputEquals("Hello!", template, [:])
         assertOutputEquals("Hello!", template, [locale:Locale.ITALIAN])
-
     }
 
     void testMessageTagWithBlankButExistingMessageBundleValue() {
@@ -609,7 +619,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
             import java.beans.PropertyEditorSupport
 
             class PhoneUsDomainMainEditor extends PropertyEditorSupport {
-                public String getAsText() {
+                String getAsText() {
                     def phoneUsNumber = getValue()
                     return "${phoneUsNumber.area}-${phoneUsNumber.prefix}-${phoneUsNumber.number}"
                 }
@@ -619,7 +629,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
             import java.beans.PropertyEditorSupport
 
             class PhoneUsDomainForPropertyPathEditor extends PropertyEditorSupport {
-                public String getAsText() {
+                String getAsText() {
                     def phoneUsNumber = getValue()
                     return "(${phoneUsNumber.area})${phoneUsNumber.prefix}-${phoneUsNumber.number}"
                 }
@@ -629,7 +639,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
             import java.beans.PropertyEditorSupport
 
             class PhoneUsInternationalDomainEditor extends PropertyEditorSupport {
-                public String getAsText() {
+                String getAsText() {
                     def phoneUsInternationalNumber = getValue()
                     return "${phoneUsInternationalNumber.country}(${phoneUsInternationalNumber.area})" +
                            "${phoneUsInternationalNumber.prefix}-${phoneUsInternationalNumber.number}"
@@ -641,7 +651,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
             import org.springframework.beans.PropertyEditorRegistry
 
             class PhonePropertyEditorDomainRegistrar implements PropertyEditorRegistrar {
-                public void registerCustomEditors(PropertyEditorRegistry registry) {
+                void registerCustomEditors(PropertyEditorRegistry registry) {
                     registry.registerCustomEditor(PhoneUsInternationalDomain, new PhoneUsInternationalDomainEditor())
                     registry.registerCustomEditor(PhoneUsDomain, new PhoneUsDomainMainEditor())
                     registry.registerCustomEditor(PhoneUsDomain, "phoneUs", new PhoneUsDomainForPropertyPathEditor())
@@ -721,7 +731,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
             import java.beans.PropertyEditorSupport
 
             class PhoneUsMainEditor extends PropertyEditorSupport {
-                public String getAsText() {
+                String getAsText() {
                     def phoneUsNumber = getValue()
                     return "${phoneUsNumber.area}-${phoneUsNumber.prefix}-${phoneUsNumber.number}"
                 }
@@ -731,7 +741,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
             import java.beans.PropertyEditorSupport
 
             class PhoneUsForPropertyPathEditor extends PropertyEditorSupport {
-                public String getAsText() {
+                String getAsText() {
                     def phoneUsNumber = getValue()
                     return "(${phoneUsNumber.area})${phoneUsNumber.prefix}-${phoneUsNumber.number}"
                 }
@@ -741,7 +751,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
             import java.beans.PropertyEditorSupport
 
             class PhoneUsInternationalEditor extends PropertyEditorSupport {
-                public String getAsText() {
+                String getAsText() {
                     def phoneUsInternationalNumber = getValue()
                     return "${phoneUsInternationalNumber.country}(${phoneUsInternationalNumber.area})" +
                            "${phoneUsInternationalNumber.prefix}-${phoneUsInternationalNumber.number}"
@@ -753,7 +763,7 @@ enum Title implements org.springframework.context.MessageSourceResolvable {
             import org.springframework.beans.PropertyEditorRegistry
 
             class PhonePropertyEditorRegistrar implements PropertyEditorRegistrar {
-                public void registerCustomEditors(PropertyEditorRegistry registry) {
+                void registerCustomEditors(PropertyEditorRegistry registry) {
                     registry.registerCustomEditor(PhoneUsInternational, new PhoneUsInternationalEditor())
                     registry.registerCustomEditor(PhoneUs, new PhoneUsMainEditor())
                     registry.registerCustomEditor(PhoneUs, "phoneUs", new PhoneUsForPropertyPathEditor())

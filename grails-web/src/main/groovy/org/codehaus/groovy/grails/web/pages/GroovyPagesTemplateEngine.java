@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +32,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
 
-import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.codehaus.groovy.control.CompilationFailedException;
@@ -86,8 +86,9 @@ import org.springframework.web.context.support.ServletContextResource;
  * @since 0.1
  */
 public class GroovyPagesTemplateEngine extends ResourceAwareTemplateEngine implements ApplicationContextAware, ServletContextAware, InitializingBean {
-    public static final String CONFIG_PROPERTY_DISABLE_CACHING_RESOURCES="grails.gsp.disable.caching.resources";
-    public static final String CONFIG_PROPERTY_GSP_ENABLE_RELOAD="grails.gsp.enable.reload";
+
+    public static final String CONFIG_PROPERTY_DISABLE_CACHING_RESOURCES = "grails.gsp.disable.caching.resources";
+    public static final String CONFIG_PROPERTY_GSP_ENABLE_RELOAD = "grails.gsp.enable.reload";
     public static final String BEAN_ID = "groovyPagesTemplateEngine";
 
     private static final String GENERATED_GSP_NAME_PREFIX = "gsp_script_";
@@ -103,7 +104,7 @@ public class GroovyPagesTemplateEngine extends ResourceAwareTemplateEngine imple
     private boolean reloadEnabled;
     private TagLibraryLookup tagLibraryLookup;
     private TagLibraryResolver jspTagLibraryResolver;
-    private boolean cacheResources=true;
+    private boolean cacheResources = true;
 
     private GrailsApplication grailsApplication;
     private Map<String, Class<?>> cachedDomainsWithoutPackage;
@@ -186,7 +187,7 @@ public class GroovyPagesTemplateEngine extends ResourceAwareTemplateEngine imple
      * @param url The URL of the page
      * @return An array where the index is the line number witin the compiled GSP and the value is the line number within the source
      */
-    public int[] calculateLineNumbersForPage(@SuppressWarnings("unused") ServletContext context, String url) {
+    public int[] calculateLineNumbersForPage(ServletContext context, String url) {
         try {
             Template t = createTemplate(url);
             if (t instanceof GroovyPageTemplate) {
@@ -540,25 +541,10 @@ public class GroovyPagesTemplateEngine extends ResourceAwareTemplateEngine imple
         GroovyPageParser parser;
         String path = getPathForResource(res);
         try {
-            String encoding = GroovyPageParser.DEFAULT_ENCODING;
-            if (grailsApplication != null) {
-                Map<String,Object> config = grailsApplication.getFlatConfig();
-                Object gspEnc = config.get(GroovyPageParser.CONFIG_PROPERTY_GSP_ENCODING);
-                if ((gspEnc != null) && (gspEnc.toString().trim().length() > 0)) {
-                    encoding = gspEnc.toString();
-                }
-
-            }
-            parser = new GroovyPageParser(name, path, path, inputStream, encoding);
+            parser = new GroovyPageParser(name, path, path, inputStream, null, null);
 
             if (grailsApplication != null) {
                 Map<String,Object> config = grailsApplication.getFlatConfig();
-
-                Object sitemeshPreprocessEnabled = config.get(GroovyPageParser.CONFIG_PROPERTY_GSP_SITEMESH_PREPROCESS);
-                if (sitemeshPreprocessEnabled != null) {
-                    final boolean enableSitemeshPreprocessing = BooleanUtils.toBoolean(String.valueOf(sitemeshPreprocessEnabled).trim());
-                    parser.setEnableSitemeshPreprocessing(enableSitemeshPreprocessing);
-                }
 
                 Object keepDirObj = config.get(GroovyPageParser.CONFIG_PROPERTY_GSP_KEEPGENERATED_DIR);
                 if (keepDirObj instanceof File) {
@@ -677,7 +663,12 @@ public class GroovyPagesTemplateEngine extends ResourceAwareTemplateEngine imple
         pageMeta.setContentType(parse.getContentType());
         pageMeta.setLineNumbers(parse.getLineNumberMatrix());
         pageMeta.setJspTags(parse.getJspTags());
-        pageMeta.setCodecName(parse.getDefaultCodecDirectiveValue());
+
+        pageMeta.setStaticCodecName(parse.getStaticCodecDirectiveValue());
+        pageMeta.setExpressionCodecName(parse.getExpressionCodecDirectiveValue());
+        pageMeta.setOutCodecName(parse.getOutCodecDirectiveValue());
+        pageMeta.setTaglibCodecName(parse.getTaglibCodecDirectiveValue());
+
         pageMeta.initialize();
         // just return groovy and don't compile if asked
         if (GrailsUtil.isDevelopmentEnv()) {

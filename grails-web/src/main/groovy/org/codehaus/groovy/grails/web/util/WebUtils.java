@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,8 +77,7 @@ public class WebUtils extends org.springframework.web.util.WebUtils {
     public static final char SLASH = '/';
     public static final String ENABLE_FILE_EXTENSIONS = "grails.mime.file.extensions";
     public static final String DISPATCH_ACTION_PARAMETER = "_action_";
-    private static final String DISPATCH_URI_SUFFIX = ".dispatch";
-    private static final String GRAILS_DISPATCH_SERVLET_NAME = "/grails";
+    public static final String SEND_ALLOW_HEADER_FOR_INVALID_HTTP_METHOD = "grails.http.invalid.method.allow.header";
 
     public static ViewResolver lookupViewResolver(ServletContext servletContext) {
         WebApplicationContext wac = WebApplicationContextUtils
@@ -150,12 +150,12 @@ public class WebUtils extends org.springframework.web.util.WebUtils {
      */
     public static String getRequestURIForGrailsDispatchURI(HttpServletRequest request) {
         UrlPathHelper pathHelper = new UrlPathHelper();
-        if (request.getRequestURI().endsWith(DISPATCH_URI_SUFFIX)) {
+        if (request.getRequestURI().endsWith(GrailsUrlPathHelper.GRAILS_DISPATCH_EXTENSION)) {
             String path = pathHelper.getPathWithinApplication(request);
-            if (path.startsWith(GRAILS_DISPATCH_SERVLET_NAME)) {
-                path = path.substring(GRAILS_DISPATCH_SERVLET_NAME.length(),path.length());
+            if (path.startsWith(GrailsUrlPathHelper.GRAILS_SERVLET_PATH)) {
+                path = path.substring(GrailsUrlPathHelper.GRAILS_SERVLET_PATH.length(),path.length());
             }
-            return path.substring(0, path.length()-DISPATCH_URI_SUFFIX.length());
+            return path.substring(0, path.length() - GrailsUrlPathHelper.GRAILS_DISPATCH_EXTENSION.length());
         }
         return pathHelper.getPathWithinApplication(request);
     }
@@ -168,6 +168,15 @@ public class WebUtils extends org.springframework.web.util.WebUtils {
     public static GrailsApplication lookupApplication(ServletContext servletContext) {
         WebApplicationContext wac = WebApplicationContextUtils.getRequiredWebApplicationContext(servletContext);
         return (GrailsApplication)wac.getBean(GrailsApplication.APPLICATION_ID);
+    }
+
+    /**
+     * Locates the ApplicationContext, returns null if not found
+     * @param servletContext The servlet context
+     * @return The ApplicationContext
+     */
+    public static ApplicationContext findApplicationContext(ServletContext servletContext) {
+        return WebApplicationContextUtils.getWebApplicationContext(servletContext);
     }
 
     /**

@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.test.support
 
+import grails.util.Holders
+import groovy.transform.CompileStatic
 import org.codehaus.groovy.grails.test.GrailsTestTargetPattern
 import org.codehaus.groovy.grails.test.GrailsTestType
 import org.codehaus.groovy.grails.test.GrailsTestTypeResult
@@ -89,6 +90,7 @@ abstract class GrailsTestTypeSupport implements GrailsTestType {
     /**
      * Sets the appropriate instance variables from the parameters, and calls {@link #doPrepare()}
      */
+    @CompileStatic
     int prepare(GrailsTestTargetPattern[] testTargetPatterns, File compiledClassesDir, Binding buildBinding) {
         this.testTargetPatterns = testTargetPatterns
         this.compiledClassesDir = compiledClassesDir
@@ -110,6 +112,7 @@ abstract class GrailsTestTypeSupport implements GrailsTestType {
      * Sets the current thread's contextClassLoader to the {@link #getTestClassLoader() test class loader},
      * calls {@link #doRun(GrailsTestEventPublisher)} and then restores the original contextClassLoader.
      */
+    @CompileStatic
     GrailsTestTypeResult run(GrailsTestEventPublisher eventPublisher) {
         def prevContextClassLoader = Thread.currentThread().contextClassLoader
         Thread.currentThread().contextClassLoader = getTestClassLoader()
@@ -162,13 +165,13 @@ abstract class GrailsTestTypeSupport implements GrailsTestType {
     /**
      * Finds source based on the {@code testSuffixes} and {@code testExtensions} that match the {@code targetPattern}.
      */
-    protected List<File> findSourceFiles(GrailsTestTargetPattern targetPattern) {
-        def sourceFiles = []
+    protected Collection<File> findSourceFiles(GrailsTestTargetPattern targetPattern) {
+        Collection<File> sourceFiles = []
         def resolveResources = buildBinding['resolveResources']
         def suffixes = testSuffixes + [""] // support the target pattern containing the suffix
-        suffixes.each { suffix ->
-            testExtensions.each { extension ->
-                def resources = resolveResources("file:${sourceDir.absolutePath}/${targetPattern.filePattern}${suffix}.${extension}".toString())
+        for(String suffix in suffixes) {
+            for(String extension in testExtensions) {
+                def resources = resolveResources("file:${getSourceDir().absolutePath}/${targetPattern.filePattern}${suffix}.${extension}".toString())
 
                 def matches = resources*.file.findAll { file ->
                     if (!file.exists()) {
@@ -192,10 +195,11 @@ abstract class GrailsTestTypeSupport implements GrailsTestType {
     /**
      * Calls {@code body} with the GrailsTestTargetPattern that matched the source, and the File for the source.
      */
+//    @CompileStatic
     protected void eachSourceFile(Closure body) {
-        testTargetPatterns.each { testTargetPattern ->
-            findSourceFiles(testTargetPattern).each { sourceFile ->
-                body(testTargetPattern, sourceFile)
+        for(GrailsTestTargetPattern testTargetPattern in testTargetPatterns) {
+            for(File sourceFile in findSourceFiles(testTargetPattern)) {
+                body.call(testTargetPattern, sourceFile)
             }
         }
     }
@@ -203,6 +207,7 @@ abstract class GrailsTestTypeSupport implements GrailsTestType {
     /**
      * Gets the corresponding class name for a source file of this test type.
      */
+    @CompileStatic
     protected String sourceFileToClassName(File sourceFile) {
         def filePath = sourceFile.canonicalPath
         def basePath = getSourceDir().canonicalPath
@@ -219,6 +224,7 @@ abstract class GrailsTestTypeSupport implements GrailsTestType {
     /**
      * Convenience method for obtaining the class file for a test class
      */
+    @CompileStatic
     protected File sourceFileToClassFile(File sourceFile) {
         new File(compiledClassesDir, sourceFileToClassName(sourceFile).replace(".", "/") + ".class")
     }
@@ -226,6 +232,7 @@ abstract class GrailsTestTypeSupport implements GrailsTestType {
     /**
      * Convenience method for obtaining the class file for a test class
      */
+    @CompileStatic
     protected Class sourceFileToClass(File sourceFile) {
         loadClass(sourceFileToClassName(sourceFile))
     }
@@ -243,6 +250,7 @@ abstract class GrailsTestTypeSupport implements GrailsTestType {
      * Loods the class named by {@code className} using a class loader that can load the test classes,
      * throwing a RuntimeException if the class can't be loaded.
      */
+    @CompileStatic
     protected Class loadClass(String className) {
         try {
             getTestClassLoader().loadClass(className)
@@ -259,7 +267,8 @@ abstract class GrailsTestTypeSupport implements GrailsTestType {
         if (buildBinding.variables.containsKey("appCtx")) {
             return buildBinding.getProperty("appCtx")
         }
-
-        throw new IllegalStateException("ApplicationContext requested, but is not present in the build binding")
+        else {
+            return Holders.applicationContext
+        }
     }
 }

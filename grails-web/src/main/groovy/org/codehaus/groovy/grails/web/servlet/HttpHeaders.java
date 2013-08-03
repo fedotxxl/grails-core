@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,4 +82,5 @@ public class HttpHeaders {
     public static final String SET_COOKIE2 = "Set-Cookie2";
     public static final String MIME_VERSION = "MIME-Version";
     public static final String IDENTITY = "identity";
+    public static final String ACCEPT_VERSION = "Accept-Version";
 }

@@ -20,6 +20,7 @@ import grails.artefact.Artefact;
 import java.util.ArrayList;
 import java.util.List;
 
+import grails.build.logging.GrailsConsole;
 import org.codehaus.groovy.ast.ASTNode;
 import org.codehaus.groovy.ast.AnnotatedNode;
 import org.codehaus.groovy.ast.AnnotationNode;
@@ -61,7 +62,6 @@ public class ArtefactTypeAstTransformation extends AbstractArtefactTypeAstTransf
                     MY_TYPE_NAME + " not allowed for interfaces.");
         }
 
-
         Expression value = node.getMember("value");
 
         if (value != null && (value instanceof ConstantExpression)) {
@@ -72,7 +72,23 @@ public class ArtefactTypeAstTransformation extends AbstractArtefactTypeAstTransf
         else {
             throw new RuntimeException("Class ["+cName+"] contains an invalid @Artefact annotation. No artefact found for value specified.");
         }
+    }
 
+    public void performInjectionOnArtefactType(SourceUnit sourceUnit, ClassNode cNode, String artefactType) {
+        doPerformInjectionOnArtefactType(sourceUnit, cNode, artefactType);
+    }
+
+    public static void doPerformInjectionOnArtefactType(SourceUnit sourceUnit, ClassNode cNode, String artefactType) {
+        try {
+            List<ClassInjector> injectors = ArtefactTypeAstTransformation.findInjectors(
+                artefactType, GrailsAwareInjectionOperation.getClassInjectors());
+            for (ClassInjector injector : injectors) {
+                injector.performInjectionOnAnnotatedClass(sourceUnit, cNode);
+            }
+        } catch (RuntimeException e) {
+            GrailsConsole.getInstance().error("Error occurred calling AST injector: " + e.getMessage(), e);
+            throw e;
+        }
     }
 
 

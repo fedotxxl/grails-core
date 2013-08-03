@@ -1,3 +1,18 @@
+/*
+ * Copyright 2004-2005 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package grails.util;
 
 import groovy.util.ConfigObject;
@@ -127,7 +142,7 @@ public abstract class AbstractBuildSettings {
      * @see #getInlinePluginsFromConfiguration(Map, File)
      */
     @SuppressWarnings({ "rawtypes" })
-    protected Collection<File> getInlinePluginsFromConfiguration(@SuppressWarnings("hiding") Map config) {
+    protected Collection<File> getInlinePluginsFromConfiguration(Map config) {
         return getInlinePluginsFromConfiguration(config, getBaseDir());
     }
 
@@ -136,7 +151,7 @@ public abstract class AbstractBuildSettings {
      *
      * TODO: consider trowing an error here if an plugin does not exists at the location.
      */
-    @SuppressWarnings({ "rawtypes", "hiding" })
+    @SuppressWarnings("rawtypes")
     protected Collection<File> getInlinePluginsFromConfiguration(Map config, File baseDir) {
         Collection<File> inlinePlugins = new ConcurrentLinkedQueue<File>();
         if (config != null) {
@@ -166,12 +181,12 @@ public abstract class AbstractBuildSettings {
         return inlinePlugins;
     }
 
-    @SuppressWarnings({ "rawtypes", "hiding" })
+    @SuppressWarnings("rawtypes")
     private Map lookupPluginLocationConfig(Map config) {
         return getIfMap(getIfMap(getIfMap(config, "grails"), "plugin"), "location");
     }
 
-    @SuppressWarnings({ "rawtypes", "hiding" })
+    @SuppressWarnings("rawtypes")
     private Map getIfMap(Map config, String name) {
         if (config != null) {
             Object o = config.get(name);

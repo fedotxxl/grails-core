@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.compiler.injection.test;
 
 import grails.test.mixin.TestFor;
@@ -110,7 +109,6 @@ public class TestForTransformation extends TestMixinTransformation {
     public static final ClassNode AFTER_CLASS_NODE = new ClassNode(After.class);
     public static final AnnotationNode AFTER_ANNOTATION = new AnnotationNode(AFTER_CLASS_NODE);
 
-
     public static final AnnotationNode TEST_ANNOTATION = new AnnotationNode(new ClassNode(Test.class));
     public static final ClassNode GROOVY_TEST_CASE_CLASS = new ClassNode(GroovyTestCase.class);
     public static final String VOID_TYPE = "void";
@@ -162,49 +160,57 @@ public class TestForTransformation extends TestMixinTransformation {
         if (value instanceof ClassExpression) {
             ce = (ClassExpression) value;
             testFor(classNode, ce);
+            return;
         }
-        else {
-            if (!junit3Test) {
-                List<AnnotationNode> annotations = classNode.getAnnotations(MY_TYPE);
-                if (annotations.size()>0) return; // bail out, in this case it was already applied as a local transform
-                // no explicit class specified try by convention
-                String fileName = source.getName();
-                String className = GrailsResourceUtils.getClassName(new org.codehaus.groovy.grails.io.support.FileSystemResource(fileName));
-                if (className != null) {
-                    String targetClassName = null;
 
-                    if (className.endsWith("Tests")) {
-                        targetClassName = className.substring(0, className.indexOf("Tests"));
-                    }
-                    else if (className.endsWith("Test")) {
-                        targetClassName = className.substring(0, className.indexOf("Test"));
-                    }
-                    else if (className.endsWith("Spec")) {
-                        targetClassName = className.substring(0, className.indexOf("Spec"));
-                    }
+        if (junit3Test) {
+            return;
+        }
 
-                    if (targetClassName != null) {
-                        Resource targetResource = getResourceLocator().findResourceForClassName(targetClassName);
-                        if (targetResource != null) {
-                            try {
-                                if (GrailsResourceUtils.isDomainClass(targetResource.getURL())) {
-                                    testFor(classNode, new ClassExpression(new ClassNode(targetClassName, 0, ClassHelper.OBJECT_TYPE)));
-                                }
-                                else {
-                                    for (String artefactType : artefactTypeToTestMap.keySet()) {
-                                        if (targetClassName.endsWith(artefactType)) {
-                                            testFor(classNode, new ClassExpression(new ClassNode(targetClassName, 0, ClassHelper.OBJECT_TYPE)));
-                                            break;
-                                        }
-                                    }
-                                }
-                            } catch (IOException e) {
-                                // ignore
-                            }
-                        }
+        List<AnnotationNode> annotations = classNode.getAnnotations(MY_TYPE);
+        if (annotations.size()>0) return; // bail out, in this case it was already applied as a local transform
+        // no explicit class specified try by convention
+        String fileName = source.getName();
+        String className = GrailsResourceUtils.getClassName(new org.codehaus.groovy.grails.io.support.FileSystemResource(fileName));
+        if (className == null) {
+            return;
+        }
+
+        String targetClassName = null;
+
+        if (className.endsWith("Tests")) {
+            targetClassName = className.substring(0, className.indexOf("Tests"));
+        }
+        else if (className.endsWith("Test")) {
+            targetClassName = className.substring(0, className.indexOf("Test"));
+        }
+        else if (className.endsWith("Spec")) {
+            targetClassName = className.substring(0, className.indexOf("Spec"));
+        }
+
+        if (targetClassName == null) {
+            return;
+        }
+
+        Resource targetResource = getResourceLocator().findResourceForClassName(targetClassName);
+        if (targetResource == null) {
+            return;
+        }
+
+        try {
+            if (GrailsResourceUtils.isDomainClass(targetResource.getURL())) {
+                testFor(classNode, new ClassExpression(new ClassNode(targetClassName, 0, ClassHelper.OBJECT_TYPE)));
+            }
+            else {
+                for (String artefactType : artefactTypeToTestMap.keySet()) {
+                    if (targetClassName.endsWith(artefactType)) {
+                        testFor(classNode, new ClassExpression(new ClassNode(targetClassName, 0, ClassHelper.OBJECT_TYPE)));
+                        break;
                     }
                 }
             }
+        } catch (IOException e) {
+            // ignore
         }
     }
 
@@ -238,19 +244,19 @@ public class TestForTransformation extends TestMixinTransformation {
                 if (isCandidateMethod(methodNode) && (methodNode.getName().startsWith("test") || existingTestAnnotations.size()>0)) {
                     if (existingTestAnnotations.size()==0) {
                         ClassNode returnType = methodNode.getReturnType();
-                        if(returnType.getName().equals(VOID_TYPE))
+                        if (returnType.getName().equals(VOID_TYPE)) {
                             methodNode.addAnnotation(TEST_ANNOTATION);
+                        }
                     }
                     hasTestMethods = true;
                 }
             }
-            if(!hasTestMethods) {
+            if (!hasTestMethods) {
                 isJunit4 = false;
             }
         }
 
-        if(isJunit4 || isJunit3Test || isSpockTest) {
-
+        if (isJunit4 || isJunit3Test || isSpockTest) {
             final MethodNode methodToAdd = weaveMock(classNode, ce, true);
             if (methodToAdd != null && isJunit3Test) {
                 addMethodCallsToMethod(classNode,SET_UP_METHOD, Arrays.asList(methodToAdd));
@@ -300,7 +306,7 @@ public class TestForTransformation extends TestMixinTransformation {
         for (String artefactType : artefactTypeToTestMap.keySet()) {
             if (className.endsWith(artefactType)) {
                 Class mixinClass = artefactTypeToTestMap.get(artefactType);
-                if(mixinClass != null) {
+                if (mixinClass != null) {
                     return mixinClass;
                 }
             }
@@ -325,20 +331,12 @@ public class TestForTransformation extends TestMixinTransformation {
         return methodBody;
     }
 
-    private void addToJunit4BeforeMethods(ClassNode classNode, String artefactType, ClassExpression targetClassExpression) {
-        BlockStatement junit4Setup = getExistingOrCreateJUnit4Setup(classNode);
-        addMockCollaborator(artefactType,targetClassExpression,junit4Setup);
-    }
-
     protected BlockStatement getExistingOrCreateJUnit4Setup(ClassNode classNode) {
         Statement code = getExistingJUnit4BeforeMethod(classNode);
-        if(code instanceof BlockStatement) {
+        if (code instanceof BlockStatement) {
             return (BlockStatement) code;
         }
-        else {
-            return getJunit4Setup(classNode);
-        }
-
+        return getJunit4Setup(classNode);
     }
 
     protected Statement getExistingJUnit4BeforeMethod(ClassNode classNode) {
@@ -428,7 +426,6 @@ public class TestForTransformation extends TestMixinTransformation {
         if (methodNode == null) {
             BlockStatement setupMethodBody = new BlockStatement();
             addMockCollaborator(type, targetClass, setupMethodBody);
-
 
             methodNode = new MethodNode(methodName, Modifier.PUBLIC, ClassHelper.VOID_TYPE, GrailsArtefactClassInjector.ZERO_PARAMETERS,null, setupMethodBody);
             methodNode.addAnnotation(BEFORE_ANNOTATION);

@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@
  */
 package org.codehaus.groovy.grails.web.mapping
 
-import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
+import groovy.transform.CompileStatic
 
 /**
  * A customizable UrlMappingInfo instance used for forwards and includes.
@@ -22,18 +23,23 @@ import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
  * @author Graeme Rocher
  * @since 1.1
  */
+@CompileStatic
 class ForwardUrlMappingInfo extends AbstractUrlMappingInfo {
 
     String controllerName
     String actionName
     String pluginName
+    String namespace
     String viewName
     String URI
     String id
+    String httpMethod
+    String version
     Map parameters = new HashMap()
 
     void setController(String controller) { controllerName = controller }
     void setAction(String action) { actionName = action }
+    void setNamespace(String namespace) { this.namespace = namespace }
     void setPluginName(String plugin) { pluginName = plugin }
     void setView(String view) { viewName = view }
     void setParams(Map params) {

@@ -15,16 +15,14 @@
  */
 package grails.spring
 
-import org.codehaus.groovy.grails.plugins.GrailsPluginManager;
-import org.codehaus.groovy.grails.plugins.PluginManagerHolder;
+import org.codehaus.groovy.grails.plugins.PluginManagerHolder
 import org.springframework.aop.SpringProxy
-import org.springframework.beans.factory.BeanIsAbstractException;
+import org.springframework.beans.factory.BeanIsAbstractException
 import org.springframework.beans.factory.ObjectFactory
 import org.springframework.beans.factory.config.Scope
 import org.springframework.context.ApplicationContext
 import org.springframework.context.support.GenericApplicationContext
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-import org.springframework.mock.jndi.SimpleNamingContextBuilder
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import org.springframework.stereotype.Component
 
 /**
@@ -272,7 +270,6 @@ class BeanBuilderTests extends GroovyTestCase {
             holyGrail(HolyGrailQuest)
             knights(KnightOfTheRoundTable, "Camelot", leader:"lancelot", quest: holyGrail)
         }
-
 
         def ctx = bb.createApplicationContext()
 

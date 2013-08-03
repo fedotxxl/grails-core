@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,6 +68,7 @@ public class DefaultGrailsDomainClassProperty implements GrailsDomainClassProper
     private GrailsDomainClass component;
     private boolean basicCollectionType;
     private Map<String, Object> defaultConstraints;
+    private boolean explicitSaveUpdateCascade = false;
 
     /**
      * Constructor.
@@ -389,7 +391,7 @@ public class DefaultGrailsDomainClassProperty implements GrailsDomainClassProper
     }
 
     public boolean isEnum() {
-        return GrailsClassUtils.isJdk5Enum(getType());
+        return getType().isEnum();
     }
 
     public String getNaturalName() {
@@ -444,6 +446,14 @@ public class DefaultGrailsDomainClassProperty implements GrailsDomainClassProper
             }
         }
         otherSide = property;
+    }
+
+    public boolean isExplicitSaveUpdateCascade() {
+        return explicitSaveUpdateCascade;
+    }
+
+    public void setExplicitSaveUpdateCascade(boolean explicitSaveUpdateCascade) {
+        this.explicitSaveUpdateCascade = explicitSaveUpdateCascade;
     }
 
     public boolean isInherited() {
@@ -641,14 +651,14 @@ public class DefaultGrailsDomainClassProperty implements GrailsDomainClassProper
             return Collections.emptyMap();
         }
 
-        public GrailsDomainClassProperty getPropertyByName(@SuppressWarnings("hiding") String name) {
+        public GrailsDomainClassProperty getPropertyByName(String name) {
             for (GrailsDomainClassProperty property : properties) {
                 if (property.getName().equals(name)) return property;
             }
             return null;
         }
 
-        public GrailsDomainClassProperty getPersistentProperty(@SuppressWarnings("hiding") String name) {
+        public GrailsDomainClassProperty getPersistentProperty(String name) {
             return getPropertyByName(name);
         }
 

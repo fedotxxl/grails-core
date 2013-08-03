@@ -16,22 +16,21 @@
 package org.codehaus.groovy.grails.plugins.services
 
 import grails.util.GrailsUtil
+import groovy.transform.CompileStatic
 
 import java.lang.reflect.Method
-
-import org.springframework.beans.factory.config.MethodInvokingFactoryBean
-import org.springframework.core.annotation.AnnotationUtils
-import org.springframework.transaction.annotation.Transactional
-import org.codehaus.groovy.grails.commons.spring.TypeSpecifyableTransactionProxyFactoryBean
+import java.lang.reflect.Modifier
 
 import org.codehaus.groovy.grails.commons.GrailsServiceClass
 import org.codehaus.groovy.grails.commons.ServiceArtefactHandler
+import org.codehaus.groovy.grails.commons.spring.TypeSpecifyableTransactionProxyFactoryBean
 import org.codehaus.groovy.grails.orm.support.GroovyAwareNamedTransactionAttributeSource
-
-import java.lang.reflect.Modifier
+import org.springframework.beans.factory.config.MethodInvokingFactoryBean
+import org.springframework.core.annotation.AnnotationUtils
+import org.springframework.transaction.annotation.Transactional
 
 /**
- * Configures services in the spring context.
+ * Configures services in the Spring context.
  *
  * @author Graeme Rocher
  * @since 0.4
@@ -39,7 +38,7 @@ import java.lang.reflect.Modifier
 class ServicesGrailsPlugin {
 
     def version = GrailsUtil.getGrailsVersion()
-    def loadAfter = ['hibernate']
+    def loadAfter = ['hibernate', 'hibernate4']
 
     def watchedResources = ["file:./grails-app/services/**/*Service.groovy",
                             "file:./plugins/*/grails-app/services/**/*Service.groovy"]
@@ -48,21 +47,15 @@ class ServicesGrailsPlugin {
         xmlns tx:"http://www.springframework.org/schema/tx"
         tx.'annotation-driven'('transaction-manager':'transactionManager')
 
-        def aliasNameToListOfBeanNames = [:].withDefault { key -> [] }
-        def registeredBeanNames = []
-        for (serviceGrailsClass in application.serviceClasses) {
-            GrailsServiceClass serviceClass = serviceGrailsClass
+        for (GrailsServiceClass serviceClass in application.serviceClasses) {
             def providingPlugin = manager?.getPluginForClass(serviceClass.clazz)
 
-            def beanName
+            String beanName
             if (providingPlugin && !serviceClass.shortName.toLowerCase().startsWith(providingPlugin.name.toLowerCase())) {
                 beanName = "${providingPlugin.name}${serviceClass.shortName}"
-                def aliasName = serviceClass.propertyName
-                aliasNameToListOfBeanNames[aliasName] << beanName
             } else {
                 beanName = serviceClass.propertyName
             }
-            registeredBeanNames << beanName
             def scope = serviceClass.getPropertyValue("scope")
             def lazyInit = serviceClass.hasProperty("lazyInit") ? serviceClass.getPropertyValue("lazyInit") : true
 
@@ -110,20 +103,20 @@ class ServicesGrailsPlugin {
                 }
             }
         }
-        aliasNameToListOfBeanNames.each { aliasName, listOfBeanNames ->
-            if (listOfBeanNames.size() == 1 && !registeredBeanNames.contains(aliasName)) {
-                registerAlias listOfBeanNames[0], aliasName
-            }
-        }
+        
+        serviceBeanAliasPostProcessor(ServiceBeanAliasPostProcessor)
     }
 
+    @CompileStatic
     boolean shouldCreateTransactionalProxy(GrailsServiceClass serviceClass) {
         Class javaClass = serviceClass.clazz
 
         try {
             serviceClass.transactional &&
+              !AnnotationUtils.findAnnotation(javaClass, grails.transaction.Transactional) &&
               !AnnotationUtils.findAnnotation(javaClass, Transactional) &&
-                 !javaClass.methods.any { Method m -> AnnotationUtils.findAnnotation(m, Transactional)!=null }
+                 !javaClass.methods.any { Method m -> AnnotationUtils.findAnnotation(m, Transactional) != null ||
+                                                        AnnotationUtils.findAnnotation(m, grails.transaction.Transactional) != null}
         }
         catch (e) {
             return false
@@ -188,7 +181,6 @@ class ServicesGrailsPlugin {
                 }
                 beans.registerBeans(event.ctx)
             }
-
         }
     }
 }

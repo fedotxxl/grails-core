@@ -3,7 +3,6 @@ package org.codehaus.groovy.grails.web.binding
 import grails.util.GrailsWebUtil
 
 import java.lang.reflect.Modifier
-import java.net.URL
 
 import org.codehaus.groovy.ast.ClassNode
 import org.codehaus.groovy.classgen.GeneratorContext
@@ -20,7 +19,7 @@ class DefaultASTDatabindingHelperSpec extends Specification {
     static dateBindingClass
     static classWithHasMany
     static classWithNoBindableProperties
-    
+
     def setupSpec() {
         final gcl = new GrailsAwareClassLoader()
         final transformer = new AstDatabindingInjector()
@@ -121,11 +120,11 @@ class DefaultASTDatabindingHelperSpec extends Specification {
                         lastName bindable: false
                     }
                 }''')
-            
+
             // there must be a request bound in order for the structured date editor to be registered
             GrailsWebUtil.bindMockWebRequest()
     }
-    
+
     void 'Test class with hasMany'() {
         when:
         final whiteListField = classWithHasMany.getDeclaredField(DefaultASTDatabindingHelper.DEFAULT_DATABINDING_WHITELIST)
@@ -201,14 +200,14 @@ class DefaultASTDatabindingHelperSpec extends Specification {
            'person.*' in whiteList
            'person_*' in whiteList
     }
-    
+
     void 'Test binding to a class that has no bindable properties'() {
         given:
             def obj = classWithNoBindableProperties.newInstance()
-            
+
         when:
             obj.properties = [firstName: 'First Name', lastName: 'Last Name']
-            
+
         then:
             obj.firstName == null
             obj.lastName == null
@@ -373,6 +372,10 @@ class DefaultASTDatabindingHelperSpec extends Specification {
                               hireDate_month: '1',
                               hireDate_day: '15',
                               hireDate_year: '2001',
+                              hireDate: 'struct',
+                              birthDate: 'struct',
+                              exitDate: 'struct',
+                              sqlDate: 'struct',
                               name: 'Jose']
             def hireDate = obj.hireDate
             def birthDate = obj.birthDate
@@ -397,12 +400,18 @@ class DefaultASTDatabindingHelperSpec extends Specification {
 
 class AstDatabindingInjector implements ClassInjector {
     void performInjection(SourceUnit source, ClassNode classNode) {
-        performInject(source, null, classNode)
+        performInjection(source, null, classNode)
     }
+
+    @Override
+    void performInjectionOnAnnotatedClass(SourceUnit source, ClassNode classNode) {
+        performInjection( source, null, classNode)
+    }
+
     void performInjection(SourceUnit source, GeneratorContext context, ClassNode classNode) {
         new DefaultASTDatabindingHelper().injectDatabindingCode(source, context, classNode)
     }
     boolean shouldInject(URL url) {
-        return true;
+        return true
     }
 }

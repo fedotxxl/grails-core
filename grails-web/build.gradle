@@ -1,11 +1,12 @@
 configurations {
     jsp21.extendsFrom compile
+    optional
 }
 
 dependencies {
     jsp21 'javax.servlet.jsp:jsp-api:2.1'
 
-    compile project(":grails-bootstrap"), project(":grails-core"), project(":grails-spring")
+    compile project(":grails-core"), project(":grails-spring"), project(":grails-async"), project(":grails-databinding")
     compile('commons-el:commons-el:1.0') {
         exclude module:'commons-logging'
     }
@@ -27,13 +28,32 @@ dependencies {
     compile "org.springframework:spring-webmvc:${springVersion}"
 
     // Required for JSP support
-    compile 'javax.servlet:jsp-api:2.0'
+    compile 'javax.servlet:jsp-api:2.0', {
+        ext.notInPom = true
+        exclude group: 'javax.servlet', module:'servlet-api'
+    }
     compile 'xpp3:xpp3_min:1.1.4c'
+
+    compile 'com.google.code.gson:gson:2.2.4'
+
     runtime 'taglibs:standard:1.1.2'
     runtime "javax.servlet:jstl:1.1.2"
+
+    optional "org.apache.ant:ant:${antVersion}"
+    optional "jline:jline:$jlineVersion"
+    optional "org.fusesource.jansi:jansi:$jansiVersion"
+
+    optional("org.codehaus.gant:gant_groovy1.8:${gantVersion}") {
+        exclude group:'commons-cli', module:'commons-cli'
+    }
+
+    compile 'org.objenesis:objenesis:1.3'
 }
 
 sourceSets {
+    main {
+        compileClasspath += files(configurations.optional)
+    }
     jsp21 {
         compileClasspath = files(configurations.jsp21, main.output)
         groovy.srcDirs = ['src/jsp21/groovy']
@@ -41,11 +61,10 @@ sourceSets {
     }
 }
 
+javadoc.classpath += files(configurations.optional)
 jar {
     from compileJsp21Groovy.outputs.files
 }
-
-jar.appendix = 'web'
 
 eclipse {
     classpath {

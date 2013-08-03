@@ -18,8 +18,8 @@ package org.codehaus.groovy.grails.resolve
 import grails.build.logging.GrailsConsole
 import grails.util.BuildSettings
 import groovy.util.slurpersupport.GPathResult
+
 import org.apache.ivy.core.cache.ArtifactOrigin
-import org.apache.ivy.core.report.ResolveReport
 import org.apache.ivy.plugins.repository.Repository
 import org.apache.ivy.plugins.repository.Resource
 import org.apache.ivy.plugins.resolver.DependencyResolver
@@ -34,17 +34,102 @@ import org.apache.ivy.plugins.resolver.RepositoryResolver
  */
 final class PluginResolveEngine {
 
-    IvyDependencyManager dependencyManager
+    DependencyManager dependencyManager
     BuildSettings settings
     Closure messageReporter = { if (it) GrailsConsole.instance.updateStatus(it)  }
 
-    PluginResolveEngine(IvyDependencyManager dependencyManager, BuildSettings settings) {
+    PluginResolveEngine(DependencyManager dependencyManager, BuildSettings settings) {
         this.dependencyManager = dependencyManager
         this.settings = settings
     }
 
-    IvyDependencyManager createFreshDependencyManager() {
+    DependencyManager createFreshDependencyManager() {
         dependencyManager.createCopy(settings)
+    }
+
+    void renderInstallInfo(String pluginName, String version, Writer writer) {
+
+        writer << """
+Since Grails 2.3, it is no longer possible to install plugins using the install-plugin command.
+Plugins must be declared in the grails-app/conf/BuildConfig.groovy file.
+"""
+
+        def pluginXml
+        if (dependencyManager instanceof IvyDependencyManager) {
+            pluginXml = resolvePluginMetadata(pluginName, version)
+            if (!version) {
+                version = pluginXml.@version.text()
+            }
+        }
+        else {
+            String url = "http://grails.org/api/v1.0/plugin/$pluginName"
+            if (version) {
+                url += "/$version"
+            }
+            try {
+                final String text = new URL("$url?format=xml").getText(connectTimeout: 500, readTimeout: 3000)
+                pluginXml = new XmlSlurper().parseText(text)
+                if (!version) {
+                    version = pluginXml.version.text()
+                }
+            }
+            catch (FileNotFoundException ignored) {}
+        }
+
+        if (!pluginXml) {
+            if (version) {
+                writer << """
+ERROR: Plugin '$pluginName' not found with version '$pluginVersion'
+"""
+            }
+            else {
+                writer << """
+ERROR: Plugin '$pluginName' not found
+"""
+            }
+            return
+        }
+
+        writer << """
+Example:
+grails.project.dependency.resolution = {
+   ...
+   plugins {
+      compile ":$pluginName:$version"
+   }
+}
+"""
+
+        def repos = []
+        def ignored = [
+            'http://plugins.grails.org',
+            'http://repo.grails.org/grails/plugins/',
+            'http://repo.grails.org/grails/core/',
+            'http://svn.codehaus.org/grails/trunk/grails-plugins']
+
+        if (pluginXml.repositories.children().size()) {
+            for (repo in pluginXml.repositories.repository) {
+                String url = repo.@url.text().trim()
+                if (url in ignored) {
+                    continue
+                }
+                if (url == 'http://repo1.maven.org/maven2/') {
+                    url = 'mavenCentral()'
+                }
+                repos << url
+            }
+        }
+
+        if (repos) {
+            writer << """
+Additionally, add these custom repositories to the "repositories" block:
+"""
+            for (repo in repos) {
+                writer << """\
+   $repo
+"""
+            }
+        }
     }
 
     /**
@@ -57,6 +142,7 @@ final class PluginResolveEngine {
     GPathResult renderPluginInfo(String pluginName, String pluginVersion, OutputStream outputStream) {
         renderPluginInfo(pluginName, pluginVersion, new OutputStreamWriter(outputStream))
     }
+
     /**
      * Renders plugin info to the target writer
      *
@@ -166,24 +252,8 @@ To get info about specific release of plugin 'grails plugin-info [NAME] [VERSION
 
 To get list of all plugins type 'grails list-plugins'
 
-To install latest version of plugin type 'grails install-plugin [NAME]'
-
-To install specific version of plugin type 'grails install-plugin [NAME] [VERSION]'
-
-For further info visit http://grails.org/Plugins
+For further info visit http://grails.org/plugins
 '''
-    }
-
-    /**
-     * Resolves a list of plugins and produces a ResolveReport
-     *
-     * @param pluginsToInstall The list of plugins
-     * @param scope The scope (defaults to runtime)
-     */
-    ResolveReport resolvePlugins(Collection<EnhancedDefaultDependencyDescriptor> pluginsToInstall, String scope = '') {
-        IvyDependencyManager newManager = createFreshDependencyManager()
-        pluginsToInstall.each { newManager.registerPluginDependency("runtime", it) }
-        return newManager.resolvePluginDependencies(scope)
     }
 
     /**
@@ -193,7 +263,7 @@ For further info visit http://grails.org/Plugins
      * @return The location of the local file or null if an error occured
      */
     File resolvePluginZip(String pluginName, String pluginVersion, String scope = "", Map args = [:]) {
-        IvyDependencyManager dependencyManager = createFreshDependencyManager()
+        DependencyManager dependencyManager = createFreshDependencyManager()
         def resolveArgs = createResolveArguments(pluginName, pluginVersion)
 
         dependencyManager.parseDependencies {
@@ -204,16 +274,12 @@ For further info visit http://grails.org/Plugins
 
         messageReporter "Resolving plugin ${pluginName}. Please wait..."
         messageReporter()
-        def report = dependencyManager.resolvePluginDependencies(scope,args)
+        def report = dependencyManager.resolve(scope)
 
         try {
-            def reports = report.getArtifactsReports(null, false)
-            def artifactReport = reports.find { it.artifact.attributes.organisation == resolveArgs.group && it.artifact.name == resolveArgs.name && (pluginVersion == null || it.artifact.moduleRevisionId.revision == pluginVersion) }
-            if (artifactReport == null) {
-                artifactReport = reports.find { it.artifact.name == pluginName && (pluginVersion == null || it.artifact.moduleRevisionId.revision == pluginVersion) }
-            }
-            if (artifactReport) {
-                return artifactReport.localFile
+            def reports = report
+            if (report.pluginZips) {
+                return report.pluginZips[0]
             }
             messageReporter "Error resolving plugin ${resolveArgs}. Plugin not found."
 

@@ -1,4 +1,5 @@
-/* Copyright 2011 SpringSource
+/*
+ * Copyright 2011 SpringSource
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,6 +84,11 @@ public class PluginAwareAstTransformer implements AllArtefactClassInjector {
     }
 
     public void performInjection(SourceUnit source, ClassNode classNode) {
+        performInjection(source, null, classNode);
+    }
+
+    @Override
+    public void performInjectionOnAnnotatedClass(SourceUnit source, ClassNode classNode) {
         performInjection(source, null, classNode);
     }
 

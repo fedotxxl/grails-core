@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.web.servlet.mvc;
 
 import org.codehaus.groovy.grails.commons.ControllerArtefactHandler;
@@ -61,6 +60,15 @@ public class DefaultRequestStateLookupStrategy implements GrailsRequestStateLook
             return req.getCurrentRequest().getCharacterEncoding();
         }
         return DEFAULT_REQUEST_ENCODING;
+    }
+
+    @Override
+    public String getHttpMethod() {
+        final GrailsWebRequest req = getWebRequest();
+        if (req != null) {
+            return req.getCurrentRequest().getMethod();
+        }
+        return null;
     }
 
     public String getControllerName() {

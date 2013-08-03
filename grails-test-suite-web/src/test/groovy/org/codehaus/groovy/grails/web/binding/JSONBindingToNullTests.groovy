@@ -53,7 +53,6 @@ class JSONBindingToNullTests {
     void testXmlBindingToNull() {
         def pebbles = new User(username:"pebbles", password:"letmein", firstName:"Pebbles", lastName:"Flintstone", middleName:"T", phone:"555-555-5555", email:'pebbles@flintstone.com', activationDate:new Date(), logonFailureCount:0, deactivationDate:null).save(flush:true)
 
-
         request.method = 'PUT'
         request.xml = pebbles
         params.id = pebbles.id
@@ -118,10 +117,6 @@ class User {
     Date lastAccessDate
 
     static constraints = {
-        username(nullable:false)
-        password(nullable:false)
-        firstName(nullable:false)
-        lastName(nullable:false)
         middleName(nullable:true)
         phone(nullable:true)
         email(nullable:true, email:true)
@@ -129,7 +124,6 @@ class User {
         createdBy(nullable:true)
         lastUpdatedBy(nullable:true)
         logonFailureCount(nullable:false)
-        activationDate(nullable:false)
         deactivationDate(nullable:true)
         lastUpdatedDate(nullable:true)
         lastAccessDate(nullable:true)

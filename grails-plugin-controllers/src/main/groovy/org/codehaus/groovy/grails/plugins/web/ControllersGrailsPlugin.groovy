@@ -18,6 +18,7 @@ package org.codehaus.groovy.grails.plugins.web
 import grails.artefact.Enhanced
 import grails.util.Environment
 import grails.util.GrailsUtil
+
 import org.codehaus.groovy.grails.commons.ControllerArtefactHandler
 import org.codehaus.groovy.grails.commons.DomainClassArtefactHandler
 import org.codehaus.groovy.grails.commons.GrailsDomainClass
@@ -29,12 +30,16 @@ import org.codehaus.groovy.grails.web.filters.HiddenHttpMethodFilter
 import org.codehaus.groovy.grails.web.metaclass.RedirectDynamicMethod
 import org.codehaus.groovy.grails.web.multipart.ContentLengthAwareCommonsMultipartResolver
 import org.codehaus.groovy.grails.web.servlet.GrailsControllerHandlerMapping
+import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequestFilter
+import org.codehaus.groovy.grails.web.servlet.mvc.MixedGrailsControllerHelper
+import org.codehaus.groovy.grails.web.servlet.mvc.RedirectEventListener
+import org.codehaus.groovy.grails.web.servlet.mvc.SimpleGrailsController
+import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.context.ApplicationContext
 import org.springframework.web.servlet.mvc.SimpleControllerHandlerAdapter
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
 import org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator
-import org.codehaus.groovy.grails.web.servlet.mvc.*
 
 /**
  * Handles the configuration of controllers for Grails.
@@ -96,19 +101,19 @@ class ControllersGrailsPlugin {
         for (controller in application.controllerClasses) {
             log.debug "Configuring controller $controller.fullName"
             if (controller.available) {
-                def cls = controller.clazz
-                "${controller.fullName}"(cls) { bean ->
-                    bean.scope = controller.getPropertyValue("scope") ?: defaultScope
-                    bean.autowire = "byName"
+                "${controller.fullName}"(controller.clazz) { bean ->
+                    def beanScope = controller.getPropertyValue("scope") ?: defaultScope
+                    bean.scope = beanScope
+                    bean.autowire =  "byName"
+                    if (beanScope == 'prototype') {
+                        bean.beanDefinition.dependencyCheck = AbstractBeanDefinition.DEPENDENCY_CHECK_NONE
+                    }
                 }
             }
         }
     }
 
     def doWithWebDescriptor = { webXml ->
-
-        def basedir = System.getProperty("base.dir")
-        def grailsEnv = Environment.current.name
 
         def mappingElement = webXml.'servlet-mapping'
         mappingElement = mappingElement[mappingElement.size() - 1]
@@ -166,8 +171,8 @@ class ControllersGrailsPlugin {
 
     def doWithDynamicMethods = {ApplicationContext ctx ->
 
-        ControllersApi controllerApi = ctx.getBean("instanceControllersApi",ControllersApi)
-        Object gspEnc = application.getFlatConfig().get("grails.views.gsp.encoding");
+        ControllersApi controllerApi = ctx.getBean("instanceControllersApi", ControllersApi)
+        Object gspEnc = application.getFlatConfig().get("grails.views.gsp.encoding")
 
         if ((gspEnc != null) && (gspEnc.toString().trim().length() > 0)) {
             controllerApi.setGspEncoding(gspEnc.toString())
@@ -176,7 +181,7 @@ class ControllersGrailsPlugin {
         def redirectListeners = ctx.getBeansOfType(RedirectEventListener)
         controllerApi.setRedirectListeners(redirectListeners.values())
 
-        Object o = application.getFlatConfig().get(RedirectDynamicMethod.GRAILS_VIEWS_ENABLE_JSESSIONID);
+        Object o = application.getFlatConfig().get(RedirectDynamicMethod.GRAILS_VIEWS_ENABLE_JSESSIONID)
         if (o instanceof Boolean) {
             controllerApi.setUseJessionId(o)
         }
@@ -200,11 +205,13 @@ class ControllersGrailsPlugin {
     }
 
     static void enhanceDomainWithBinding(ApplicationContext ctx, GrailsDomainClass dc, MetaClass mc) {
-        if (!dc.abstract) {
-            def enhancer = new MetaClassEnhancer()
-            enhancer.addApi(new ControllersDomainBindingApi())
-            enhancer.enhance mc
+        if (dc.abstract) {
+            return
         }
+
+        def enhancer = new MetaClassEnhancer()
+        enhancer.addApi(new ControllersDomainBindingApi())
+        enhancer.enhance mc
     }
 
     def onChange = {event ->
@@ -232,8 +239,12 @@ class ControllersGrailsPlugin {
             def controllerClass = application.addArtefact(ControllerArtefactHandler.TYPE, event.source)
             def beanDefinitions = beans {
                 "${controllerClass.fullName}"(controllerClass.clazz) { bean ->
-                    bean.scope = controllerClass.getPropertyValue("scope") ?: defaultScope
-                    bean.autowire = true
+                    def beanScope = controllerClass.getPropertyValue("scope") ?: defaultScope
+                    bean.scope = beanScope
+                    bean.autowire = "byName"
+                    if (beanScope == 'prototype') {
+                        bean.beanDefinition.dependencyCheck = AbstractBeanDefinition.DEPENDENCY_CHECK_NONE
+                    }
                 }
             }
             // now that we have a BeanBuilder calling registerBeans and passing the app ctx will

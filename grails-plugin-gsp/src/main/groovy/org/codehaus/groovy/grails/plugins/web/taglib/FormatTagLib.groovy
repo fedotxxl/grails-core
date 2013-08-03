@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +15,19 @@
  */
 package org.codehaus.groovy.grails.plugins.web.taglib
 
-import org.springframework.web.servlet.support.RequestContextUtils as RCU
-
 import grails.artefact.Artefact
+import groovy.transform.CompileStatic
+
 import java.math.RoundingMode
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
+
 import org.apache.commons.lang.time.FastDateFormat
+import org.codehaus.groovy.grails.support.encoding.CodecLookup
+import org.codehaus.groovy.grails.support.encoding.Encoder
+import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
+import org.springframework.context.MessageSource
 import org.springframework.context.NoSuchMessageException
 import org.springframework.util.StringUtils
 
@@ -40,11 +46,14 @@ class FormatTagLib {
 
     static returnObjectForTags = ['formatBoolean','formatDate','formatNumber','encodeAs']
 
-    String messageHelper(code, defaultMessage = null, args = null, locale = null) {
+    MessageSource messageSource
+    CodecLookup codecLookup
+
+    @CompileStatic
+    String messageHelper(String code, Object defaultMessage = null, List args = null, Locale locale = null) {
         if (locale == null) {
-            locale = RCU.getLocale(request)
+            locale = GrailsWebRequest.lookup().getLocale()
         }
-        def messageSource = grailsAttributes.applicationContext.messageSource
         def message
         try {
             message = messageSource.getMessage(code, args == null ? null : args.toArray(), locale)
@@ -95,18 +104,16 @@ class FormatTagLib {
 
         def locale = resolveLocale(attrs.locale)
         if (b) {
-            if(attrs.containsKey('true')) {
+            if (attrs.containsKey('true')) {
                 return attrs['true']
-            } else {
-                return messageHelper('boolean.true', { messageHelper('default.boolean.true', 'True', null, locale) }, null, locale)
             }
+            return messageHelper('boolean.true', { messageHelper('default.boolean.true', 'True', null, locale) }, null, locale)
         }
-        
-        if(attrs.containsKey('false')) {
+
+        if (attrs.containsKey('false')) {
             return attrs['false']
-        } else {
-            return messageHelper('boolean.false', { messageHelper('default.boolean.false', 'False', null, locale) }, null, locale)
         }
+        return messageHelper('boolean.false', { messageHelper('default.boolean.false', 'False', null, locale) }, null, locale)
     }
 
     /**
@@ -143,8 +150,8 @@ class FormatTagLib {
         }
 
         def locale = resolveLocale(attrs.locale)
-        String timeStyle = null
-        String dateStyle = null
+        String timeStyle
+        String dateStyle
         if (attrs.style != null) {
             String style = attrs.style.toString().toUpperCase()
             timeStyle = style
@@ -341,13 +348,16 @@ class FormatTagLib {
         return formatted
     }
 
-    def resolveLocale(localeAttr) {
-        def locale = localeAttr
-        if (locale != null && !(locale instanceof Locale)) {
-            locale = StringUtils.parseLocaleString(locale as String)
+    @CompileStatic
+    static Locale resolveLocale(Object localeAttr) {
+        Locale locale
+        if (localeAttr instanceof Locale) {
+            locale = (Locale)localeAttr
+        } else if (localeAttr != null) {
+            locale = StringUtils.parseLocaleString(localeAttr.toString())
         }
         if (locale == null) {
-            locale = RCU.getLocale(request)
+            locale = GrailsWebRequest.lookup().getLocale()
             if (locale == null) {
                 locale = Locale.getDefault()
             }
@@ -364,7 +374,7 @@ class FormatTagLib {
         if (!attrs.codec) {
             throwTagError("Tag [encodeAs] requires a codec name in the [codec] attribute")
         }
-
-        return body()?."encodeAs${attrs.codec}"()
+        Encoder encoder = codecLookup.lookupEncoder(attrs.codec.toString())
+        return encoder.encode(body())
     }
 }

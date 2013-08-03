@@ -40,7 +40,9 @@ import org.codehaus.groovy.grails.web.sitemesh.GrailsLayoutDecoratorMapper;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.servlet.FrameworkServlet;
 import org.springframework.web.util.WebUtils;
 
@@ -81,6 +83,16 @@ public class GroovyPagesServlet extends FrameworkServlet implements PluginManage
         setContextAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE);
     }
 
+    @Override
+    protected ServletRequestAttributes buildRequestAttributes(HttpServletRequest request, HttpServletResponse response, RequestAttributes previousAttributes) {
+        if(previousAttributes instanceof GrailsWebRequest) {
+            return null;
+        }
+        else {
+            return super.buildRequestAttributes(request, response, previousAttributes);
+        }
+    }
+
     /**
      * The size of the buffer used when formulating the response
      */
@@ -118,7 +130,6 @@ public class GroovyPagesServlet extends FrameworkServlet implements PluginManage
             pageName = groovyPagesTemplateEngine.getCurrentRequestUri(request);
         }
 
-
         boolean isNotInclude = !WebUtils.isIncludeRequest(request) ;
         if (isNotInclude && isSecurePath(pageName)) {
             sendNotFound(response, pageName);
@@ -138,7 +149,6 @@ public class GroovyPagesServlet extends FrameworkServlet implements PluginManage
 
             renderPageWithEngine(groovyPagesTemplateEngine, request, response, scriptSource);
         }
-
     }
 
     public GroovyPagesTemplateEngine getGroovyPagesTemplateEngine() {

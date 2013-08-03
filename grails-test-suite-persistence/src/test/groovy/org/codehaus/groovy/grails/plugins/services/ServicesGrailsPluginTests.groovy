@@ -1,9 +1,9 @@
-package org.codehaus.groovy.grails.plugins.services;
-
+package org.codehaus.groovy.grails.plugins.services
 
 import org.codehaus.groovy.grails.commons.spring.WebRuntimeSpringConfiguration
 import org.codehaus.groovy.grails.commons.test.AbstractGrailsMockTests
 import org.codehaus.groovy.grails.plugins.DefaultGrailsPlugin
+import org.codehaus.groovy.grails.plugins.MockHibernateGrailsPlugin
 import org.springframework.context.ApplicationContext
 import org.springframework.transaction.NoTransactionException
 
@@ -59,8 +59,6 @@ class PerMethodTransactionalService {
 """
     }
 
-
-
     void testPerMethodTransactionAnnotations() {
         def appCtx = initializeContext()
 
@@ -82,7 +80,6 @@ class PerMethodTransactionalService {
         def appCtx = initializeContext()
 
         assertTrue appCtx.containsBean("dataSource")
-        assertTrue appCtx.containsBean("sessionFactory")
         assertTrue appCtx.containsBean("someTransactionalService")
         assertTrue appCtx.containsBean("nonTransactionalService")
     }
@@ -95,8 +92,7 @@ class PerMethodTransactionalService {
 
         def domainPluginClass = gcl.loadClass("org.codehaus.groovy.grails.plugins.DomainClassGrailsPlugin")
         def dataSourcePlugin = new DefaultGrailsPlugin(dataSourcePluginClass, ga)
-        def hibernatePluginClass = gcl.loadClass("org.codehaus.groovy.grails.orm.hibernate.MockHibernateGrailsPlugin")
-        def hibernatePlugin = new DefaultGrailsPlugin(hibernatePluginClass, ga)
+        def hibernatePlugin = new DefaultGrailsPlugin(MockHibernateGrailsPlugin, ga)
         def domainPlugin = new DefaultGrailsPlugin(domainPluginClass, ga)
 
         def springConfig = new WebRuntimeSpringConfiguration(ctx)

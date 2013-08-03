@@ -1,7 +1,5 @@
 dependencies {
     compile "org.springframework:spring-tx:${springVersion}"
 
-    compile project(":grails-core"),
-            project(':grails-bootstrap')
+    compile project(":grails-core"), project(":grails-plugin-datasource")
 }
-jar.appendix = 'plugin-services'

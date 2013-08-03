@@ -1,4 +1,5 @@
-/* Copyright 2011 the original author or authors.
+/*
+ * Copyright 2011 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,11 +34,11 @@ public class JarDependenciesConfigurer extends AbstractDependenciesConfigurer {
 
     @Override
     protected void handleExport(EnhancedDefaultDependencyDescriptor descriptor, Boolean export) {
-        if (export != null) {
-            descriptor.setExported(export);
+        if (export == null) {
+            descriptor.setExport(true);
         }
         else {
-            descriptor.setExport(true);
+            descriptor.setExported(export);
         }
     }
 

@@ -15,13 +15,10 @@
  */
 package org.codehaus.groovy.grails.web.mapping;
 
-import grails.util.CollectionUtils;
 import groovy.lang.Closure;
+import org.springframework.core.io.Resource;
 
 import java.util.List;
-import java.util.Map;
-
-import org.springframework.core.io.Resource;
 
 /**
  * Evaluates URL mapping from the given Spring Resource or class.
@@ -34,14 +31,6 @@ import org.springframework.core.io.Resource;
  */
 public interface UrlMappingEvaluator {
 
-    // default HTTP method to action name mappings
-    @SuppressWarnings("unchecked")
-    Map<String, String> DEFAULT_REST_MAPPING = CollectionUtils.<String, String>newMap(
-        "GET", "show",
-        "POST", "save",
-        "PUT", "update",
-        "DELETE", "delete");
-
     /**
      * Evaluates URL mapping from the give Spring Resource
      *
@@ -50,7 +39,7 @@ public interface UrlMappingEvaluator {
      * @return A list of UrlMapping instances
      */
     @SuppressWarnings("rawtypes")
-    List evaluateMappings(Resource resource);
+    List<UrlMapping> evaluateMappings(Resource resource);
 
     /**
      * Evaluates mapping from the given class if possible
@@ -59,7 +48,7 @@ public interface UrlMappingEvaluator {
      * @return A list of UrlMapping instances
      */
     @SuppressWarnings("rawtypes")
-    List evaluateMappings(Class theClass);
+    List<UrlMapping> evaluateMappings(Class theClass);
 
     /**
      * Evaluates mapping from the given closure if possible
@@ -68,5 +57,5 @@ public interface UrlMappingEvaluator {
      * @return A list of UrlMapping instances
      */
     @SuppressWarnings("rawtypes")
-    List evaluateMappings(Closure closure);
+    List<UrlMapping> evaluateMappings(Closure closure);
 }

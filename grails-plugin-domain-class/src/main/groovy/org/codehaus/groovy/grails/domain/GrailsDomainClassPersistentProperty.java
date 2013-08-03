@@ -1,4 +1,5 @@
-/* Copyright (C) 2011 SpringSource
+/*
+ * Copyright 2011 SpringSource
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,7 @@
 package org.codehaus.groovy.grails.domain;
 
 import org.codehaus.groovy.grails.commons.GrailsDomainClassProperty;
+import org.grails.datastore.mapping.config.Property;
 import org.grails.datastore.mapping.model.ClassMapping;
 import org.grails.datastore.mapping.model.PersistentEntity;
 import org.grails.datastore.mapping.model.PersistentProperty;
@@ -42,7 +44,7 @@ public class GrailsDomainClassPersistentProperty implements PersistentProperty {
                 return owner.getMapping();
             }
 
-            public Object getMappedForm() {
+            public Property getMappedForm() {
                 return null;
             }
         };

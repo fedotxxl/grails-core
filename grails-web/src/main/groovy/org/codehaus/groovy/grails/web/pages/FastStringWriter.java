@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,16 +30,22 @@ import org.codehaus.groovy.grails.web.util.StreamCharBuffer;
  */
 public class FastStringWriter extends GrailsPrintWriter {
 
-    private final StreamCharBuffer streamBuffer;
+    protected final StreamCharBuffer streamBuffer;
 
     public FastStringWriter() {
-        super(new StreamCharBuffer().getWriter());
-        streamBuffer = ((StreamCharBuffer.StreamCharBufferWriter) out).getBuffer();
+        super(null);
+        streamBuffer = new StreamCharBuffer();
+        initOut();
     }
 
     public FastStringWriter(int initialChunkSize) {
-        super(new StreamCharBuffer(initialChunkSize).getWriter());
-        streamBuffer = ((StreamCharBuffer.StreamCharBufferWriter)out).getBuffer();
+        super(null);
+        streamBuffer = new StreamCharBuffer(initialChunkSize);
+        initOut();
+    }
+
+    protected void initOut() {
+        setOut(streamBuffer.getWriter());
     }
 
     protected FastStringWriter(Object o) {

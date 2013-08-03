@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,7 +99,7 @@ public class GrailsTask extends Task {
         runGrails(script, args);
     }
 
-    protected void runGrails(String targetName, @SuppressWarnings("hiding") String args) {
+    protected void runGrails(String targetName, String args) {
         // First get the dependencies from the classpath.
         List<URL> urls = new ArrayList<URL>();
         if (classpath != null) {
@@ -236,7 +237,7 @@ public class GrailsTask extends Task {
         return classpath;
     }
 
-    public void addClasspath(@SuppressWarnings("hiding") Path classpath) {
+    public void addClasspath(Path classpath) {
         this.classpath = classpath;
     }
 
@@ -250,7 +251,7 @@ public class GrailsTask extends Task {
     }
 
     @Deprecated
-    public void addCompileClasspath(@SuppressWarnings("hiding") Path compileClasspath) {
+    public void addCompileClasspath(Path compileClasspath) {
         this.compileClasspath = compileClasspath;
     }
 
@@ -260,7 +261,7 @@ public class GrailsTask extends Task {
     }
 
     @Deprecated
-    public void addTestClasspath(@SuppressWarnings("hiding") Path testClasspath) {
+    public void addTestClasspath(Path testClasspath) {
         this.testClasspath = testClasspath;
     }
 
@@ -270,7 +271,7 @@ public class GrailsTask extends Task {
     }
 
     @Deprecated
-    public void addRuntimeClasspath(@SuppressWarnings("hiding") Path runtimeClasspath) {
+    public void addRuntimeClasspath(Path runtimeClasspath) {
         this.runtimeClasspath = runtimeClasspath;
     }
 }

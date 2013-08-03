@@ -19,8 +19,10 @@ import grails.util.BuildSettings
 import grails.util.BuildSettingsHolder
 import grails.util.Environment
 import grails.util.Metadata
-import org.apache.commons.beanutils.BeanUtils
+import groovy.transform.CompileStatic
+
 import org.apache.log4j.Appender
+import org.apache.log4j.AppenderSkeleton
 import org.apache.log4j.ConsoleAppender
 import org.apache.log4j.FileAppender
 import org.apache.log4j.HTMLLayout
@@ -28,6 +30,7 @@ import org.apache.log4j.Level
 import org.apache.log4j.LogManager
 import org.apache.log4j.Logger
 import org.apache.log4j.PatternLayout
+import org.apache.log4j.PropertyConfigurator
 import org.apache.log4j.RollingFileAppender
 import org.apache.log4j.SimpleLayout
 import org.apache.log4j.helpers.LogLog
@@ -35,7 +38,6 @@ import org.apache.log4j.jdbc.JDBCAppender
 import org.apache.log4j.varia.NullAppender
 import org.apache.log4j.xml.XMLLayout
 import org.codehaus.groovy.grails.plugins.log4j.appenders.GrailsConsoleAppender
-import groovy.transform.CompileStatic
 
 /**
  * Encapsulates the configuration of Log4j.
@@ -55,19 +57,23 @@ class Log4jConfig {
     private Map appenders = [:]
     private ConfigObject config
 
+    @CompileStatic
     Log4jConfig(ConfigObject config) {
         this.config = config
     }
 
     @CompileStatic
-    public static void initialize(ConfigObject config) {
+    static void initialize(ConfigObject config) {
         if (config == null) {
             return
         }
 
-        LogManager.resetConfiguration()
         Object o = config.get("log4j")
         Log4jConfig log4jConfig = new Log4jConfig(config)
+        LogManager.resetConfiguration()
+        if(Environment.isFork()) {
+            initialiseDefaultLog4jConfiguration()
+        }
         if (o instanceof Closure) {
             log4jConfig.configure((Closure<?>)o)
         }
@@ -82,6 +88,17 @@ class Log4jConfig {
             log4jConfig.configure()
         }
     }
+
+    @CompileStatic
+    static void initialiseDefaultLog4jConfiguration() {
+        def defaultLog4j = new Properties()
+        defaultLog4j."log4j.rootLogger"="error, stdout"
+        defaultLog4j."log4j.appender.stdout"="org.apache.log4j.ConsoleAppender"
+        defaultLog4j."log4j.appender.stdout.layout"="org.apache.log4j.PatternLayout"
+
+        PropertyConfigurator.configure(defaultLog4j)
+    }
+
 
     def propertyMissing(String name) {
         if (LAYOUTS.containsKey(name)) {
@@ -100,7 +117,7 @@ class Log4jConfig {
                 constructorArgs.layout = DEFAULT_PATTERN_LAYOUT
             }
             def appender = APPENDERS[name].newInstance()
-            BeanUtils.populate appender, constructorArgs
+            populate appender, constructorArgs
             if (!appender.name) {
                 LogLog.error "Appender of type $name doesn't define a name attribute, and hence is ignored."
             }
@@ -120,6 +137,22 @@ class Log4jConfig {
         }
 
         LogLog.error "Method missing when configuring log4j: $name"
+    }
+
+    @CompileStatic
+    void populate(Appender appender, Map args) {
+        final metaClass = GroovySystem.getMetaClassRegistry().getMetaClass(appender.getClass())
+        for(key in args.keySet()) {
+            final value = args.get(key)
+            String prop = key.toString()
+            if (appender.hasProperty(prop)) {
+                try {
+                    metaClass.setProperty(appender, prop, value)
+                } catch (MissingPropertyException mpe) {
+                    // ignore
+                }
+            }
+        }
     }
 
     private boolean isCustomEnvironmentMethod(String name, args) {
@@ -145,7 +178,6 @@ class Log4jConfig {
         callable.resolveStrategy = Closure.DELEGATE_FIRST
         callable.call()
     }
-
 
     /**
      * Configure Log4J from a map whose values are DSL closures.  This simply
@@ -480,7 +512,7 @@ class RootLog4jConfig {
 class EnvironmentsLog4JConfig {
     Log4jConfig config
 
-    def EnvironmentsLog4JConfig(Log4jConfig config) {
+    EnvironmentsLog4JConfig(Log4jConfig config) {
         this.config = config
     }
 

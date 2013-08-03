@@ -13,22 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.compiler
 
 import grails.util.BuildSettings
+import grails.util.Environment
 import grails.util.GrailsNameUtils
 import grails.util.PluginBuildSettings
+
+import org.apache.tools.ant.AntTypeDefinition
+import org.apache.tools.ant.ComponentHelper
 import org.codehaus.groovy.control.CompilationUnit
 import org.codehaus.groovy.control.CompilerConfiguration
 import org.codehaus.groovy.control.Phases
+import org.codehaus.groovy.grails.cli.api.BaseSettingsApi
+import org.codehaus.groovy.grails.cli.fork.compile.ForkedGrailsCompiler
+import org.codehaus.groovy.grails.cli.logging.GrailsConsoleAntBuilder
 import org.codehaus.groovy.grails.compiler.injection.GrailsAwareClassLoader
 import org.codehaus.groovy.grails.compiler.injection.GrailsAwareInjectionOperation
 import org.codehaus.groovy.grails.plugins.GrailsPluginInfo
 import org.codehaus.groovy.grails.plugins.build.scopes.PluginScopeInfo
-import grails.util.Environment
-import org.apache.tools.ant.AntTypeDefinition
-import org.apache.tools.ant.ComponentHelper
 
 /**
  * Encapsulates the compilation logic required for a Grails application.
@@ -36,7 +39,7 @@ import org.apache.tools.ant.ComponentHelper
  * @author Graeme Rocher
  * @since 2.0
  */
-class GrailsProjectCompiler {
+class GrailsProjectCompiler extends BaseSettingsApi{
 
     public static final List<String> EXCLUDED_PATHS =  ["views", "i18n", "conf"]
     private static final String CLASSPATH_REF = "grails.compile.classpath"
@@ -74,6 +77,7 @@ class GrailsProjectCompiler {
      * @param rootLoader The ClassLoader
      */
     GrailsProjectCompiler(PluginBuildSettings pluginBuildSettings, ClassLoader rootLoader = Thread.currentThread().getContextClassLoader()) {
+        super(pluginBuildSettings.buildSettings, false)
         pluginSettings = pluginBuildSettings
         buildSettings = pluginBuildSettings.buildSettings
         targetClassesDir = buildSettings.classesDir
@@ -113,14 +117,14 @@ class GrailsProjectCompiler {
 
     AntBuilder getAnt() {
         if (ant == null) {
-           ant = new AntBuilder()
-            AntTypeDefinition atd = new AntTypeDefinition();
-            atd.setName('groovyc');
-            atd.setClassName(org.codehaus.groovy.grails.compiler.Grailsc.name);
-            atd.setClass(org.codehaus.groovy.grails.compiler.Grailsc);
-            atd.setClassLoader(classLoader);
+            ant = new GrailsConsoleAntBuilder()
+            AntTypeDefinition atd = new AntTypeDefinition()
+            atd.setName('groovyc')
+            atd.setClassName(Grailsc.name)
+            atd.setClass(Grailsc)
+            atd.setClassLoader(classLoader)
             ComponentHelper.getComponentHelper(ant.project)
-                    .addDataTypeDefinition(atd);
+                           .addDataTypeDefinition(atd)
            ant.path(id: "grails.compile.classpath", compileClasspath)
         }
         return ant
@@ -226,8 +230,18 @@ class GrailsProjectCompiler {
      * Compiles plugin and normal sources
      */
     void compileAll() {
-        compilePlugins()
-        compile()
+        if (buildSettings.forkSettings.compile && !Environment.isFork()) {
+            def forkedCompiler = new ForkedGrailsCompiler(buildSettings)
+            def forkConfig = buildSettings.forkSettings.compile
+            if (forkConfig instanceof Map) {
+                forkedCompiler.configure(forkConfig)
+            }
+            forkedCompiler.fork()
+        }
+        else {
+            compilePlugins()
+            compile()
+        }
     }
 
     /**
@@ -291,7 +305,6 @@ class GrailsProjectCompiler {
         def classesDirPath = targetDir
         getAnt().mkdir(dir:classesDirPath)
 
-
         final pluginClassesDir = buildSettings.pluginClassesDir
         final pluginProvidedClassesDir = buildSettings.pluginProvidedClassesDir
         final pluginBuildClassesDir = buildSettings.pluginBuildClassesDir
@@ -313,8 +326,6 @@ class GrailsProjectCompiler {
         compilePluginSources(pluginSettings.providedScopePluginInfo, pluginProvidedClassesDir)
         compilePluginSources(pluginSettings.compileScopePluginInfo, classesDirPath)
         compilePluginSources(pluginSettings.testScopePluginInfo, buildSettings.testClassesDir)
-
-
     }
 
     private  compilePluginSources(PluginScopeInfo pluginCompileInfo, classesDirPath) {
@@ -351,7 +362,7 @@ class GrailsProjectCompiler {
             def cl = new GrailsAwareClassLoader(classLoader)
             cl.addURL(new File(classesDirString).toURI().toURL())
             def unit = new CompilationUnit (config , null , cl)
-            unit.addPhaseOperation(new GrailsAwareInjectionOperation(), Phases.CANONICALIZATION);
+            unit.addPhaseOperation(new GrailsAwareInjectionOperation(), Phases.CANONICALIZATION)
             def pluginFiles = pluginCompileInfo.pluginDescriptors
 
             for (plugin in pluginFiles) {

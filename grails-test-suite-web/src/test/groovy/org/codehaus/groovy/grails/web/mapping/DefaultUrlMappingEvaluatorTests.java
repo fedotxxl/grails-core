@@ -7,6 +7,7 @@ import groovy.lang.GroovyShell;
 import groovy.lang.Script;
 
 import java.util.List;
+import java.util.Map;
 
 import org.codehaus.groovy.grails.validation.ConstrainedProperty;
 import org.codehaus.groovy.grails.validation.Constraint;
@@ -36,6 +37,29 @@ public class DefaultUrlMappingEvaluatorTests extends AbstractGrailsMappingTests 
         assertEquals(3, mappings.size());
     }
 
+    public void testRedirectMappings() throws Exception {
+        GroovyShell shell = new GroovyShell();
+        Binding binding = new Binding();
+        Script script = shell.parse("mappings = {\n" +
+                "\"/first\"(redirect:[controller: 'foo', action: 'bar'])\n" +
+                "\"/second\"(redirect: '/bing/bang')\n" +
+        "}");
+
+        script.setBinding(binding);
+        script.run();
+
+        Closure closure = (Closure)binding.getVariable("mappings");
+        List<UrlMapping> mappings = evaluator.evaluateMappings(closure);
+        assertEquals(2, mappings.size());
+        Object redirectInfo = mappings.get(0).getRedirectInfo();
+        assertTrue(redirectInfo instanceof Map);
+        Map redirectMap = (Map)redirectInfo;
+        assertEquals(2, redirectMap.size());
+        assertEquals("foo", redirectMap.get("controller"));
+        assertEquals("bar", redirectMap.get("action"));
+        assertEquals("/bing/bang", mappings.get(1).getRedirectInfo());
+    }
+    
     @SuppressWarnings("rawtypes")
     public void testNewMethod () throws Exception {
         GroovyShell shell = new GroovyShell ();
@@ -62,8 +86,8 @@ public class DefaultUrlMappingEvaluatorTests extends AbstractGrailsMappingTests 
         assertNull(mapping.getActionName());
         assertNull(mapping.getControllerName());
         assertEquals("(*)",mapping.getUrlData().getTokens()[0]);
-        assertEquals("(*)",mapping.getUrlData().getTokens()[1]);
-        assertEquals("(*)",mapping.getUrlData().getTokens()[2]);
+        assertEquals("(*)?",mapping.getUrlData().getTokens()[1]);
+        assertEquals("(*)?",mapping.getUrlData().getTokens()[2]);
 
         assertNotNull(mapping.getConstraints());
 
@@ -87,7 +111,7 @@ public class DefaultUrlMappingEvaluatorTests extends AbstractGrailsMappingTests 
 
     @SuppressWarnings("rawtypes")
     public void testOldMethod () throws Exception {
-        GroovyShell shell = new GroovyShell ();
+        GroovyShell shell = new GroovyShell();
         Script script = shell.parse (
                 "mappings {\n" +
                 "    \"/$controller/$action?/$id?\" { \n" +
@@ -97,15 +121,14 @@ public class DefaultUrlMappingEvaluatorTests extends AbstractGrailsMappingTests 
                 "    }\n" +
                 "}\n");
 
-        @SuppressWarnings("hiding")
-        DefaultUrlMappingEvaluator evaluator = new DefaultUrlMappingEvaluator (new MockServletContext("/test"));
+        DefaultUrlMappingEvaluator evaluator = new DefaultUrlMappingEvaluator(new MockServletContext("/test"));
         List mappings = evaluator.evaluateMappings(script.getClass());
         assertEquals(1, mappings.size());
         assertNull(((UrlMapping) mappings.get(0)).getActionName());
         assertNull(((UrlMapping) mappings.get(0)).getControllerName());
         assertEquals("(*)",((UrlMapping) mappings.get(0)).getUrlData().getTokens()[0]);
-        assertEquals("(*)",((UrlMapping) mappings.get(0)).getUrlData().getTokens()[1]);
-        assertEquals("(*)",((UrlMapping) mappings.get(0)).getUrlData().getTokens()[2]);
+        assertEquals("(*)?",((UrlMapping) mappings.get(0)).getUrlData().getTokens()[1]);
+        assertEquals("(*)?",((UrlMapping) mappings.get(0)).getUrlData().getTokens()[2]);
     }
 
     private boolean makeSureMatchesConstraintExistsOnId(UrlMapping mapping) {

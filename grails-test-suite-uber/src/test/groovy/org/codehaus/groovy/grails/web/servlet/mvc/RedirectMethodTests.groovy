@@ -1,9 +1,14 @@
 package org.codehaus.groovy.grails.web.servlet.mvc
 
+import grails.util.MockRequestDataValueProcessor
+
 import org.codehaus.groovy.grails.plugins.web.api.ControllersApi
+import org.codehaus.groovy.grails.support.MockApplicationContext
+import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes
 import org.codehaus.groovy.grails.web.servlet.HttpHeaders
 import org.codehaus.groovy.grails.web.servlet.mvc.exceptions.CannotRedirectException
 import org.springframework.beans.MutablePropertyValues
+import org.springframework.web.servlet.support.RequestDataValueProcessor
 
 /**
  * Tests the behaviour of the redirect method.
@@ -12,6 +17,16 @@ import org.springframework.beans.MutablePropertyValues
  * @since 1.0
  */
 class RedirectMethodTests extends AbstractGrailsControllerTests {
+
+    void registerRequestDataValueProcessor() {
+        RequestDataValueProcessor requestDataValueProcessor = new MockRequestDataValueProcessor()
+        MockApplicationContext applicationContext = (MockApplicationContext)ctx
+        applicationContext.registerMockBean("requestDataValueProcessor",requestDataValueProcessor)
+    }
+    void unRegisterRequestDataValueProcessor() {
+        MockApplicationContext applicationContext = (MockApplicationContext)ctx
+        applicationContext.registerMockBean("requestDataValueProcessor",null)
+    }
 
     protected void onSetUp() {
         gcl.parseClass('''
@@ -27,6 +42,21 @@ class UrlMappings {
                 // apply constraints here
             }
         }
+        "/noNamespace/$action?" {
+            controller = 'namespaced'
+        }
+        "/anotherNoNamespace/$action?" {
+            controller = 'anotherNamespaced'
+        }
+
+        "/secondaryNamespace/$action?" {
+            controller = 'namespaced'
+            namespace = 'secondary'
+        }
+        "/anotherSecondaryNamespace/$action?" {
+            controller = 'anotherNamespaced'
+            namespace = 'secondary'
+        }
     }
 }
 ''')
@@ -34,7 +64,48 @@ class UrlMappings {
 
     @Override
     protected Collection<Class> getControllerClasses() {
-        [NewsSignupController, RedirectController, AController, ABCController]
+        [NewsSignupController,
+         RedirectController,
+         AController,
+         ABCController,
+         org.codehaus.groovy.grails.web.servlet.mvc.alpha.NamespacedController,
+         org.codehaus.groovy.grails.web.servlet.mvc.beta.NamespacedController]
+    }
+
+    void testRedirectsWithNamespacedControllers() {
+        def primary = new org.codehaus.groovy.grails.web.servlet.mvc.alpha.NamespacedController()
+        webRequest.controllerName = 'namespaced'
+        primary.redirectToSelf()
+        assertEquals '/noNamespace/demo', response.redirectedUrl
+
+        request.removeAttribute(GrailsApplicationAttributes.REDIRECT_ISSUED)
+        primary.redirectToSecondary()
+        assertEquals '/secondaryNamespace/demo', response.redirectedUrl
+
+        def secondary = new org.codehaus.groovy.grails.web.servlet.mvc.beta.NamespacedController()
+        request.removeAttribute(GrailsApplicationAttributes.REDIRECT_ISSUED)
+        secondary.redirectToPrimary()
+        assertEquals '/noNamespace/demo', response.redirectedUrl
+
+        request.removeAttribute(GrailsApplicationAttributes.REDIRECT_ISSUED)
+        secondary.redirectToSelfWithImplicitNamespace()
+        assertEquals '/secondaryNamespace/demo', response.redirectedUrl
+
+        request.removeAttribute(GrailsApplicationAttributes.REDIRECT_ISSUED)
+        secondary.redirectToSelfWithExplicitNamespace()
+        assertEquals '/secondaryNamespace/demo', response.redirectedUrl
+
+        request.removeAttribute(GrailsApplicationAttributes.REDIRECT_ISSUED)
+        secondary.redirectToAnotherPrimary()
+        assertEquals '/anotherNoNamespace/demo', response.redirectedUrl
+
+        request.removeAttribute(GrailsApplicationAttributes.REDIRECT_ISSUED)
+        secondary.redirectToAnotherSecondaryWithImplicitNamespace()
+        assertEquals '/anotherSecondaryNamespace/demo', response.redirectedUrl
+
+        request.removeAttribute(GrailsApplicationAttributes.REDIRECT_ISSUED)
+        secondary.redirectToAnotherSecondaryWithExplicitNamespace()
+        assertEquals '/anotherSecondaryNamespace/demo', response.redirectedUrl
     }
 
     void testRedirectToDefaultActionOfAnotherController() {
@@ -42,6 +113,15 @@ class UrlMappings {
         webRequest.controllerName = 'newsSignup'
         c.redirectToDefaultAction.call()
         assertEquals "/redirect/toAction", response.redirectedUrl
+    }
+
+    void testRedirectToDefaultActionOfAnotherControllerWithRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new NewsSignupController()
+        webRequest.controllerName = 'newsSignup'
+        c.redirectToDefaultAction.call()
+        assertEquals "/redirect/toAction?requestDataValueProcessorParamName=paramValue", response.redirectedUrl
+        unRegisterRequestDataValueProcessor()
     }
 
     void testRedirectEventListeners() {
@@ -95,6 +175,15 @@ class UrlMappings {
         assertEquals "/", response.redirectedUrl
     }
 
+    void testRedirectToRootWtihRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new RedirectController()
+        webRequest.controllerName = 'redirect'
+        c.toRoot.call()
+        assertEquals "/?requestDataValueProcessorParamName=paramValue", response.redirectedUrl
+        unRegisterRequestDataValueProcessor()
+    }
+
     void testRedirectToAbsoluteURL() {
         def c = new RedirectController()
         webRequest.controllerName = 'redirect'
@@ -110,11 +199,29 @@ class UrlMappings {
         assertEquals "/test/foo#frag", response.redirectedUrl
     }
 
+    void testRedirectWithFragmentAndRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new RedirectController()
+        webRequest.controllerName = 'redirect'
+        c.toControllerAndActionWithFragment.call()
+        assertEquals "/test/foo?requestDataValueProcessorParamName=paramValue#frag", response.redirectedUrl
+        unRegisterRequestDataValueProcessor()
+    }
+
     void testRedirectInControllerWithOneLetterClassName() {
         def c = new AController()
         webRequest.controllerName = 'a'
         c.index.call()
         assertEquals "/a/list", response.redirectedUrl
+    }
+
+    void testRedirectInControllerWithOneLetterClassNameAndRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new AController()
+        webRequest.controllerName = 'a'
+        c.index.call()
+        assertEquals "/a/list?requestDataValueProcessorParamName=paramValue", response.redirectedUrl
+        unRegisterRequestDataValueProcessor()
     }
 
     void testRedirectInControllerWithAllUpperCaseClassName() {
@@ -123,12 +230,29 @@ class UrlMappings {
         c.index.call()
         assertEquals "/ABC/list", response.redirectedUrl
     }
+    void testRedirectInControllerWithAllUpperCaseClassNameAndRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new ABCController()
+        webRequest.controllerName = 'ABC'
+        c.index.call()
+        assertEquals "/ABC/list?requestDataValueProcessorParamName=paramValue", response.redirectedUrl
+        unRegisterRequestDataValueProcessor()
+    }
 
     void testRedirectToAction() {
         def c = new RedirectController()
         webRequest.controllerName = 'redirect'
         c.toAction.call()
         assertEquals "/redirect/foo", response.redirectedUrl
+    }
+
+    void testRedirectToActionWithRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new RedirectController()
+        webRequest.controllerName = 'redirect'
+        c.toAction.call()
+        assertEquals "/redirect/foo?requestDataValueProcessorParamName=paramValue", response.redirectedUrl
+        unRegisterRequestDataValueProcessor()
     }
 
     void testRedirectToActionWithGstring() {
@@ -145,6 +269,15 @@ class UrlMappings {
         assertEquals "/test", response.redirectedUrl
     }
 
+    void testRedirectToControllerWithRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new RedirectController()
+        webRequest.controllerName = 'redirect'
+        c.toController.call()
+        assertEquals "/test?requestDataValueProcessorParamName=paramValue", response.redirectedUrl
+        unRegisterRequestDataValueProcessor()
+    }
+
     void testRedirectToControllerAndAction() {
         def c = new RedirectController()
         webRequest.controllerName = 'redirect'
@@ -159,11 +292,29 @@ class UrlMappings {
         assertEquals "/test/foo?one=two&two=three", response.redirectedUrl
     }
 
+    void testRedirectToControllerWithParamsAndRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new RedirectController()
+        webRequest.controllerName = 'redirect'
+        c.toControllerWithParams.call()
+        assertEquals "/test/foo?one=two&two=three&requestDataValueProcessorParamName=paramValue", response.redirectedUrl
+        unRegisterRequestDataValueProcessor()
+    }
+
     void testRedirectToControllerWithDuplicateParams() {
         def c = new RedirectController()
         webRequest.controllerName = 'redirect'
         c.toControllerWithDuplicateParams.call()
         assertEquals "/test/foo?one=two&one=three", response.redirectedUrl
+    }
+
+    void testRedirectToControllerWithDuplicateParamsAndRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new RedirectController()
+        webRequest.controllerName = 'redirect'
+        c.toControllerWithDuplicateParams.call()
+        assertEquals "/test/foo?one=two&one=three&requestDataValueProcessorParamName=paramValue", response.redirectedUrl
+        unRegisterRequestDataValueProcessor()
     }
 
     void testRedirectToControllerWithDuplicateArrayParams() {
@@ -173,12 +324,31 @@ class UrlMappings {
         assertEquals "/test/foo?one=two&one=three", response.redirectedUrl
     }
 
+    void testRedirectToControllerWithDuplicateArrayParamsAndRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new RedirectController()
+        webRequest.controllerName = 'redirect'
+        c.toControllerWithDuplicateArrayParams.call()
+        assertEquals "/test/foo?one=two&one=three&requestDataValueProcessorParamName=paramValue", response.redirectedUrl
+        unRegisterRequestDataValueProcessor()
+    }
+
     void testRedirectToActionWithMapping() {
         def c = new NewsSignupController()
         c = new NewsSignupController()
         webRequest.controllerName = 'newsSignup'
         c.testNoController.call()
         assertEquals "/little-brown-bottle/thankyou", response.redirectedUrl
+    }
+
+    void testRedirectToActionWithMappingAndRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new NewsSignupController()
+        c = new NewsSignupController()
+        webRequest.controllerName = 'newsSignup'
+        c.testNoController.call()
+        assertEquals "/little-brown-bottle/thankyou?requestDataValueProcessorParamName=paramValue", response.redirectedUrl
+        unRegisterRequestDataValueProcessor()
     }
 
     void testPermanentRedirect() {
@@ -192,6 +362,18 @@ class UrlMappings {
         assertEquals 301, response.status
     }
 
+    void testPermanentRedirectAndRequestDataValueProcessor() {
+        registerRequestDataValueProcessor()
+        def c = new RedirectController()
+        webRequest.controllerName = 'redirect'
+        webRequest.currentRequest.serverPort = 8080
+        c.toActionPermanent.call()
+
+        // location header should be absolute
+        assertEquals "http://localhost:8080/redirect/foo?requestDataValueProcessorParamName=paramValue", response.getHeader(HttpHeaders.LOCATION)
+        assertEquals 301, response.status
+        unRegisterRequestDataValueProcessor()
+    }
 }
 
 class TestRedirectListener implements RedirectEventListener {
@@ -206,9 +388,11 @@ class TestRedirectListener implements RedirectEventListener {
 class ABCController {
     def index = { redirect action: 'list' }
 }
+
 class AController {
     def index = { redirect action: 'list' }
 }
+
 class RedirectController {
 
     static defaultAction = 'toAction'

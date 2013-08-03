@@ -15,15 +15,14 @@
  */
 package org.codehaus.groovy.grails.cli.maven
 
-import org.codehaus.groovy.grails.cli.api.BaseSettingsApi
 import grails.util.BuildSettings
 import grails.util.Metadata
-
-import org.codehaus.groovy.grails.plugins.GrailsPluginUtils;
-import org.codehaus.groovy.grails.resolve.EnhancedDefaultDependencyDescriptor
-import org.apache.ivy.core.module.descriptor.DependencyDescriptor
-import org.codehaus.groovy.grails.resolve.IvyDependencyManager
 import grails.util.PluginBuildSettings
+
+import org.codehaus.groovy.grails.cli.api.BaseSettingsApi
+import org.codehaus.groovy.grails.plugins.GrailsPluginUtils
+import org.codehaus.groovy.grails.resolve.Dependency
+import org.codehaus.groovy.grails.resolve.DependencyManager
 
 /**
  * Generates a POM for a Grails application.
@@ -31,7 +30,8 @@ import grails.util.PluginBuildSettings
  * @author Graeme Rocher
  * @since 2.1
  */
-class MavenPomGenerator extends BaseSettingsApi{
+class MavenPomGenerator extends BaseSettingsApi {
+
     MavenPomGenerator(BuildSettings buildSettings) {
         super(buildSettings, false)
     }
@@ -65,7 +65,6 @@ class MavenPomGenerator extends BaseSettingsApi{
         addDependenciesForScope(dependencyManager, "provided", plugins, "<type>zip</type>")
         addDependenciesForScope(dependencyManager, "build", plugins, "<type>zip</type>", "provided")
 
-
         def ant = new AntBuilder()
         ant.replace(file:pomFile) {
             replacefilter token:"@grailsVersion@", value:buildSettings.grailsVersion
@@ -74,29 +73,27 @@ class MavenPomGenerator extends BaseSettingsApi{
             replacefilter token:"@version@", value:version
             replacefilter token:"@dependencies@", value:dependencies.join(System.getProperty("line.separator"))
             replacefilter token:"@plugins@", value:plugins.join(System.getProperty("line.separator"))
-
         }
     }
 
     private String readVersion(BuildSettings buildSettings, metadata) {
-        if(buildSettings.isPluginProject()) {
-            def pluginSettings = GrailsPluginUtils.getPluginBuildSettings(buildSettings)
-            final info = pluginSettings.getPluginInfo(buildSettings.getBaseDir().absolutePath)
-            return info.version
-        }
-        else {
+        if (!buildSettings.isPluginProject()) {
             return metadata.getApplicationVersion()
         }
+
+        def pluginSettings = GrailsPluginUtils.getPluginBuildSettings(buildSettings)
+        final info = pluginSettings.getPluginInfo(buildSettings.getBaseDir().absolutePath)
+        return info.version
     }
 
-    def addDependenciesForScope(IvyDependencyManager dependencyManager, String scope, ArrayList<String> dependencies, String type = "", String newScope = null) {
-        final appDependencies = type ? dependencyManager.effectivePluginDependencyDescriptors : dependencyManager.getApplicationDependencyDescriptors(scope)
-        dependencies.addAll(appDependencies.findAll {  EnhancedDefaultDependencyDescriptor dd -> dd.scope == scope }.collect() {  EnhancedDefaultDependencyDescriptor dd ->
+    protected void addDependenciesForScope(DependencyManager dependencyManager, String scope, ArrayList<String> dependencies, String type = "", String newScope = null) {
+        Collection<Dependency> appDependencies = type ? dependencyManager.getPluginDependencies(scope) : dependencyManager.getApplicationDependencies(scope)
+        dependencies.addAll(appDependencies.collect {  Dependency dd  ->
             """
     <dependency>
-        <groupId>$dd.dependencyId.organisation</groupId>
-        <artifactId>$dd.dependencyId.name</artifactId>
-        <version>$dd.dependencyRevisionId.revision</version>
+        <groupId>$dd.group</groupId>
+        <artifactId>$dd.name</artifactId>
+        <version>$dd.version</version>
         <scope>${ newScope ?: scope }</scope>
         $type
     </dependency>

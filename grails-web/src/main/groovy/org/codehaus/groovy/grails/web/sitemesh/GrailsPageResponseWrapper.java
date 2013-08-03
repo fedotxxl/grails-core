@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +58,7 @@ public class GrailsPageResponseWrapper extends HttpServletResponseWrapper{
         super(response);
         this.parserSelector = parserSelector;
 
-        routablePrintWriter = new GrailsRoutablePrintWriter(new GrailsRoutablePrintWriter.DestinationFactory() {
+        routablePrintWriter = GrailsRoutablePrintWriter.newInstance(new GrailsRoutablePrintWriter.DestinationFactory() {
             public PrintWriter activateDestination() throws IOException {
                 return response.getWriter();
             }
@@ -75,7 +76,7 @@ public class GrailsPageResponseWrapper extends HttpServletResponseWrapper{
 
     @Override
     public void sendError(int sc) throws IOException {
-        aborted = true;
+        abortRequest();
         GrailsWebRequest webRequest = WebUtils.retrieveGrailsWebRequest();
         try {
             super.sendError(sc);
@@ -87,7 +88,7 @@ public class GrailsPageResponseWrapper extends HttpServletResponseWrapper{
 
     @Override
     public void sendError(int sc, String msg) throws IOException {
-        aborted = true;
+        abortRequest();
         GrailsWebRequest webRequest = WebUtils.retrieveGrailsWebRequest();
         try {
             super.sendError(sc, msg);
@@ -95,6 +96,10 @@ public class GrailsPageResponseWrapper extends HttpServletResponseWrapper{
         finally {
             WebUtils.storeGrailsWebRequest(webRequest);
         }
+    }
+
+    private void abortRequest() {
+        aborted = true;
     }
 
     /**
@@ -137,11 +142,15 @@ public class GrailsPageResponseWrapper extends HttpServletResponseWrapper{
             }
         });
         parseablePage = true;
+        aborted = false;
     }
 
-    private void deactivateSiteMesh() {
+    public void deactivateSiteMesh() {
         parseablePage = false;
         buffer = null;
+        if (gspSitemeshPage != null) {
+            gspSitemeshPage.reset();
+        }
         routablePrintWriter.updateDestination(new GrailsRoutablePrintWriter.DestinationFactory() {
             public PrintWriter activateDestination() throws IOException {
                 return getResponse().getWriter();
@@ -203,9 +212,11 @@ public class GrailsPageResponseWrapper extends HttpServletResponseWrapper{
     @Override
     public void setStatus(int sc) {
         if (sc == HttpServletResponse.SC_NOT_MODIFIED) {
-            aborted = true;
+            abortRequest();
             // route any content back to the original writer.  There shouldn't be any content, but just to be safe
             deactivateSiteMesh();
+        } else if (sc >= 400) {
+            abortRequest();
         }
         super.setStatus(sc);
     }
@@ -235,7 +246,7 @@ public class GrailsPageResponseWrapper extends HttpServletResponseWrapper{
 
     @Override
     public void sendRedirect(String location) throws IOException {
-        aborted = true;
+        abortRequest();
         super.sendRedirect(location);
     }
 
@@ -302,10 +313,11 @@ public class GrailsPageResponseWrapper extends HttpServletResponseWrapper{
                     throw new IllegalStateException("response.getWriter() called after response.getOutputStream()");
                 }
                 charBuffer=new StreamCharBuffer();
+                charBuffer.setNotifyParentBuffersEnabled(false);
                 if (gspSitemeshPage != null) {
                     gspSitemeshPage.setPageBuffer(charBuffer);
                 }
-                exposedWriter = new GrailsPrintWriterAdapter(charBuffer.getWriter());
+                exposedWriter = GrailsPrintWriterAdapter.newInstance(charBuffer.getWriter());
             }
             return exposedWriter;
         }

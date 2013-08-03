@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,6 +84,7 @@ class PluginBuildSettings {
     private Map pluginMetaDataMap = new ConcurrentHashMap()
     private Map<String, PluginInfo> pluginInfosMap = new ConcurrentHashMap<String, PluginInfo>()
     private Map<String, PluginInfo> pluginInfoToSourceMap = new ConcurrentHashMap<String, PluginInfo>()
+
     private pluginLocations
 
     PluginScopeInfo compileScopePluginInfo = new PluginScopeInfo("compile")
@@ -111,7 +113,6 @@ class PluginBuildSettings {
             return
         }
 
-        populateSourceDirectories(compileScopePluginInfo,  buildSettings.pluginCompileDependencies)
         populateSourceDirectories(compileScopePluginInfo,  buildSettings.pluginRuntimeDependencies)
 
         for (pluginDir in getInlinePluginDirectories()) {
@@ -173,7 +174,7 @@ class PluginBuildSettings {
         compileInfo.pluginInfos << info
         compileInfo.pluginNames << info.name
         compileInfo.sourceDirectories.addAll(
-                getPluginSourceDirectories(dir.file.canonicalFile).findAll {  Resource it ->
+                getPluginSourceDirectories(dir.file.canonicalFile).findAll { Resource it ->
                     !excludedPaths.contains(it.file.name) && it.file.isDirectory()
                 })
         compileInfo.pluginDescriptors << getPluginDescriptor(dir)
@@ -195,7 +196,10 @@ class PluginBuildSettings {
     /**
      * Returns an array of PluginInfo objects
      */
-    GrailsPluginInfo[] getPluginInfos(String pluginDirPath = this.pluginDirPath) {
+    GrailsPluginInfo[] getPluginInfos() {
+        getPluginInfos(this.pluginDirPath)
+    }
+    GrailsPluginInfo[] getPluginInfos(String pluginDirPath) {
         if (pluginInfosMap) {
             return cache.pluginInfoList
         }
@@ -230,7 +234,7 @@ class PluginBuildSettings {
     /**
      * Returns an array of the inplace plugin locations.
      */
-    @CompileStatic
+    //@CompileStatic
     Resource[] getInlinePluginDirectories() {
         Resource[] locations = (Resource[])cache['inlinePluginLocations']
         if (locations == null) {
@@ -419,7 +423,6 @@ class PluginBuildSettings {
         return (Resource[])sourceFiles
     }
 
-
     /**
      * Gets all the plugin source directories for the given plugin directory
      */
@@ -551,7 +554,6 @@ class PluginBuildSettings {
         return allArtefactResources
     }
 
-
     /**
      * @return A list of plugin infos that are supported and scoped for compile or runtime
      */
@@ -589,7 +591,7 @@ class PluginBuildSettings {
      *
      * @return An array of all artefact resources
      */
-    @CompileStatic
+    //@CompileStatic
     Resource[] getArtefactResourcesForCurrentEnvironment() {
         Resource[] artefactResources = (Resource[])cache['allArtefactResourcesForEnvironment']
         if (artefactResources == null) {
@@ -606,7 +608,7 @@ class PluginBuildSettings {
                 artefactResourcesList.addAll getArtefactResourcesForOne(dir.file.absolutePath)
             }
 
-            artefactResources = artefactResourcesList as Resource[];
+            artefactResources = artefactResourcesList as Resource[]
             cache['allArtefactResourcesForEnvironment'] = artefactResources
         }
         return artefactResources
@@ -619,7 +621,6 @@ class PluginBuildSettings {
     Resource[] getArtefactResourcesForOne(String projectDir) {
         return resourceResolver("file:${projectDir}/grails-app/**/*.groovy")
     }
-
 
     Resource[] getPluginDescriptorsForCurrentEnvironment() {
         def descriptorList  = cache.pluginDescriptorsForCurrentEnvironment
@@ -779,7 +780,7 @@ class PluginBuildSettings {
 
                 def (name, version, xml) = result
 
-                if (name == null || version == null) return null;
+                if (name == null || version == null) return null
 
                 def pluginInfo = getPluginInfoForName(name)
                 if (pluginInfo != null) {
@@ -824,7 +825,7 @@ class PluginBuildSettings {
         return descriptor
     }
 
-    @CompileStatic
+    //@CompileStatic
     private Resource[] resolveResources(String key, boolean processExcludes, Closure c) {
         Resource[] resources = (Resource[])cache[key]
         if (!resources) {

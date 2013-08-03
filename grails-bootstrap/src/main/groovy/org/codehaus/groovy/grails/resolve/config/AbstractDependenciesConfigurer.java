@@ -1,4 +1,5 @@
-/* Copyright 2011 the original author or authors.
+/*
+ * Copyright 2011 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,26 +49,27 @@ abstract class AbstractDependenciesConfigurer extends AbstractDependencyManageme
         }
 
         List<Object> argsList = Arrays.asList((Object[])args);
-        if (argsList.size() == 0) {
+        if (argsList.isEmpty()) {
             GrailsConsole.getInstance().error("WARNING: Configurational method [" + name + "] in grails-app/conf/BuildConfig.groovy doesn't exist. Ignoring..");
             return null;
         }
 
         if (isOnlyStrings(argsList)) {
             addDependencyStrings(name, argsList, null, null);
-
-        } else if (isProperties(argsList)) {
+        }
+        else if (isProperties(argsList)) {
             addDependencyMaps(name, argsList, null);
-
-        } else if (isStringsAndConfigurer(argsList)) {
+        }
+        else if (isStringsAndConfigurer(argsList)) {
             addDependencyStrings(name, argsList.subList(0, argsList.size() - 1), null, (Closure<?>)argsList.get(argsList.size() - 1));
-
-        } else if (isPropertiesAndConfigurer(argsList)) {
+        }
+        else if (isPropertiesAndConfigurer(argsList)) {
             addDependencyMaps(name, argsList.subList(0, argsList.size() - 1), (Closure<?>)argsList.get(argsList.size() - 1));
-        } else if (isStringsAndProperties(argsList)) {
+        }
+        else if (isStringsAndProperties(argsList)) {
             addDependencyStrings(name, argsList.subList(0, argsList.size() - 1), (Map<Object, Object>)argsList.get(argsList.size() - 1), null);
-
-        } else {
+        }
+        else {
             GrailsConsole.getInstance().error("WARNING: Configurational method [" + name + "] in grails-app/conf/BuildConfig.groovy doesn't exist. Ignoring..");
         }
 
@@ -168,9 +170,9 @@ abstract class AbstractDependenciesConfigurer extends AbstractDependencyManageme
         boolean transitive = getBooleanValueOrDefault(dependency, "transitive", true);
         Boolean export = getExportSetting(dependency);
 
-        boolean isExcluded = context.pluginName != null ?
-                context.dependencyManager.isExcludedFromPlugin(context.pluginName, name) :
-                context.dependencyManager.isExcluded(name);
+        boolean isExcluded = context.pluginName == null ?
+                context.dependencyManager.isExcluded(name) :
+                context.dependencyManager.isExcludedFromPlugin(context.pluginName, name);
 
         if (isExcluded) {
             return;
@@ -232,7 +234,7 @@ abstract class AbstractDependenciesConfigurer extends AbstractDependencyManageme
         return properties.containsKey(propertyName) ? Boolean.valueOf(properties.get(propertyName).toString()) : defaultValue;
     }
 
-    protected void preprocessDependencyProperties(@SuppressWarnings("unused") Map<Object, Object> dependency) {
+    protected void preprocessDependencyProperties(Map<Object, Object> dependency) {
         // used in plugin subclass to populate default group id
     }
 

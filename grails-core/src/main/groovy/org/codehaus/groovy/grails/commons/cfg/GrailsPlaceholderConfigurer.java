@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +21,6 @@ import java.io.IOException;
 import java.util.Properties;
 
 import org.codehaus.groovy.grails.commons.GrailsApplication;
-import org.springframework.beans.factory.config.PropertyPlaceholderConfigurer;
 import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 
 /**
@@ -42,7 +42,7 @@ public class GrailsPlaceholderConfigurer extends PropertySourcesPlaceholderConfi
 
     @Override
     protected void loadProperties(Properties props) throws IOException {
-        ConfigObject config =   grailsApplication.getConfig();
+        ConfigObject config = grailsApplication.getConfig();
         if (config != null) {
             props.putAll(config.toProperties());
         }

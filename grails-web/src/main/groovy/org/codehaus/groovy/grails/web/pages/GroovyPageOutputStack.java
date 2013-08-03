@@ -1,14 +1,33 @@
+/*
+ * Copyright 2011 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.codehaus.groovy.grails.web.pages;
 
+import java.io.IOException;
 import java.io.Writer;
 import java.util.Stack;
 
-import org.apache.commons.io.output.NullWriter;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes;
+import org.codehaus.groovy.grails.support.encoding.EncodedAppenderWriterFactory;
+import org.codehaus.groovy.grails.support.encoding.Encoder;
+import org.codehaus.groovy.grails.support.encoding.EncodingStateRegistry;
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest;
-import org.codehaus.groovy.grails.web.util.GrailsPrintWriter;
+import org.codehaus.groovy.grails.web.util.CodecPrintWriter;
+import org.codehaus.groovy.grails.web.util.GrailsLazyProxyPrintWriter;
+import org.codehaus.groovy.grails.web.util.GrailsLazyProxyPrintWriter.DestinationFactory;
 import org.codehaus.groovy.grails.web.util.GrailsWrappedWriter;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -23,78 +42,59 @@ public final class GroovyPageOutputStack {
         return currentStack(true);
     }
 
-    public static GroovyPageOutputStack currentStack(RequestAttributes request) {
+    public static GroovyPageOutputStack currentStack(GrailsWebRequest request) {
         return currentStack(request, true);
     }
 
     public static GroovyPageOutputStack currentStack(boolean allowCreate) {
-        return currentStack(allowCreate, null, allowCreate, false);
+        return currentStack(GrailsWebRequest.lookup(), allowCreate);
     }
 
-    public static GroovyPageOutputStack currentStack(RequestAttributes request,boolean allowCreate) {
-        return currentStack(request, allowCreate, null, allowCreate, false);
+    public static GroovyPageOutputStack currentStack(GrailsWebRequest request, boolean allowCreate) {
+        if (allowCreate) {
+            return currentStack(request, allowCreate, null, allowCreate, false);
+        }
+        return lookupStack(request);
     }
 
     public static GroovyPageOutputStack currentStack(boolean allowCreate, Writer topWriter, boolean autoSync, boolean pushTop) {
-        RequestAttributes request = RequestContextHolder.currentRequestAttributes();
-        return currentStack(request, allowCreate, topWriter, autoSync, pushTop);
+        return currentStack(GrailsWebRequest.lookup(), allowCreate, topWriter, autoSync, pushTop);
     }
 
-    public static GroovyPageOutputStack currentStack(RequestAttributes request, boolean allowCreate, Writer topWriter, boolean autoSync, boolean pushTop) {
-        GroovyPageOutputStack outputStack = (GroovyPageOutputStack) request.getAttribute(
-                ATTRIBUTE_NAME_OUTPUT_STACK, RequestAttributes.SCOPE_REQUEST);
+    public static GroovyPageOutputStack currentStack(GrailsWebRequest request, boolean allowCreate, Writer topWriter, boolean autoSync, boolean pushTop) {
+        return currentStack(new GroovyPageOutputStackAttributes.Builder().webRequest(request).allowCreate(allowCreate).topWriter(topWriter).autoSync(autoSync).pushTop(pushTop).build());
+    }
+
+    public static GroovyPageOutputStack currentStack(GroovyPageOutputStackAttributes attributes) {
+        GroovyPageOutputStack outputStack = lookupStack(attributes.getWebRequest());
         if (outputStack != null) {
-            if (pushTop && topWriter != null) {
-                outputStack.push(topWriter);
+            if (attributes.isPushTop()) {
+                outputStack.push(attributes, false);
             }
             return outputStack;
         }
 
-        if (allowCreate) {
-            if (topWriter == null) {
-                if (request instanceof GrailsWebRequest) {
-                    topWriter = defaultRequest((GrailsWebRequest) request);
-                }
+        if (attributes.isAllowCreate()) {
+            if (attributes.getTopWriter() == null) {
+                attributes=new GroovyPageOutputStackAttributes.Builder(attributes).topWriter(lookupRequestWriter(attributes.getWebRequest())).build();
             }
-            return createNew(topWriter, autoSync);
+            return createNew(attributes);
         }
 
         return null;
     }
 
-    private static GrailsWebRequest getGrailsWebRequest() {
-        Object requestAttributes=RequestContextHolder.currentRequestAttributes();
-        if (requestAttributes instanceof GrailsWebRequest) {
-            return (GrailsWebRequest)requestAttributes;
-        }
-
-        return null;
-    }
-
-    private static Writer defaultRequest() {
-        GrailsWebRequest webRequest=getGrailsWebRequest();
-        return defaultRequest(webRequest);
-    }
-
-    private static Writer defaultRequest(GrailsWebRequest webRequest) {
-        if (webRequest != null) {
-            return webRequest.getOut();
-        }
-
-        return null;
-    }
-
-    public static final GroovyPageOutputStack createNew(Writer topWriter) {
-        return createNew(topWriter, false);
-    }
-
-    private static final GroovyPageOutputStack createNew(Writer topWriter, boolean autoSync) {
-        GroovyPageOutputStack instance = new GroovyPageOutputStack(topWriter, autoSync);
-        RequestAttributes requestAttributes = RequestContextHolder.currentRequestAttributes();
-        requestAttributes.setAttribute(
+    private static final GroovyPageOutputStack createNew(GroovyPageOutputStackAttributes attributes) {
+        GroovyPageOutputStack instance = new GroovyPageOutputStack(attributes);
+        attributes.getWebRequest().setAttribute(
                 ATTRIBUTE_NAME_OUTPUT_STACK, instance, RequestAttributes.SCOPE_REQUEST);
-        requestAttributes.setAttribute(GrailsApplicationAttributes.OUT, topWriter, RequestAttributes.SCOPE_REQUEST);
         return instance;
+    }
+
+    private static GroovyPageOutputStack lookupStack(GrailsWebRequest webRequest) {
+        GroovyPageOutputStack outputStack = (GroovyPageOutputStack) webRequest.getAttribute(
+                ATTRIBUTE_NAME_OUTPUT_STACK, RequestAttributes.SCOPE_REQUEST);
+        return outputStack;
     }
 
     public static final void removeCurrentInstance() {
@@ -105,48 +105,137 @@ public final class GroovyPageOutputStack {
     public static final Writer currentWriter() {
         GroovyPageOutputStack outputStack=currentStack(false);
         if (outputStack != null) {
-            return outputStack.getProxyWriter();
+            return outputStack.getOutWriter();
         }
 
-        return defaultRequest();
+        return lookupRequestWriter();
     }
 
-    private Stack<WriterPair> stack = new Stack<WriterPair>();
-    private GroovyPageProxyWriter proxyWriter;
-    private boolean autoSync;
+    private static Writer lookupRequestWriter() {
+        GrailsWebRequest webRequest=GrailsWebRequest.lookup();
+        return lookupRequestWriter(webRequest);
+    }
 
-    private class WriterPair {
+    private static Writer lookupRequestWriter(GrailsWebRequest webRequest) {
+        if (webRequest != null) {
+            return webRequest.getOut();
+        }
+        return null;
+    }
+
+    private Stack<StackEntry> stack = new Stack<StackEntry>();
+    private GroovyPageProxyWriter taglibWriter;
+    private GroovyPageProxyWriter outWriter;
+    private GroovyPageProxyWriter staticWriter;
+    private GroovyPageProxyWriter expressionWriter;
+    private boolean autoSync;
+    private EncodingStateRegistry encodingStateRegistry;
+    private GroovyPageProxyWriterGroup writerGroup = new GroovyPageProxyWriterGroup();
+
+    private static class StackEntry implements Cloneable {
         Writer originalTarget;
         Writer unwrappedTarget;
+        Encoder staticEncoder;
+        Encoder taglibEncoder;
+        Encoder defaultTaglibEncoder;
+        Encoder outEncoder;
+        Encoder expressionEncoder;
 
-        WriterPair(Writer originalTarget, Writer unwrappedTarget) {
+        StackEntry(Writer originalTarget, Writer unwrappedTarget) {
             this.originalTarget = originalTarget;
             this.unwrappedTarget = unwrappedTarget;
         }
+
+        @Override
+        public StackEntry clone() {
+            StackEntry newEntry = new StackEntry(originalTarget, unwrappedTarget);
+            newEntry.staticEncoder = staticEncoder;
+            newEntry.outEncoder = outEncoder;
+            newEntry.taglibEncoder = taglibEncoder;
+            newEntry.defaultTaglibEncoder = defaultTaglibEncoder;
+            newEntry.expressionEncoder = expressionEncoder;
+            return newEntry;
+        }
     }
 
-    private class GroovyPageProxyWriter extends GrailsPrintWriter {
-        public GroovyPageProxyWriter() {
-            super(new NullWriter());
+    static class GroovyPageProxyWriterGroup {
+        GroovyPageProxyWriter activeWriter;
+
+        void reset() {
+            activateWriter(null);
         }
 
-        @SuppressWarnings("unused")
+        void activateWriter(GroovyPageProxyWriter newWriter) {
+            if (newWriter != activeWriter) {
+                flushActive();
+                activeWriter = newWriter;
+            }
+        }
+
+        void flushActive() {
+            if (activeWriter != null) {
+                activeWriter.flush();
+            }
+        }
+    }
+
+    public class GroovyPageProxyWriter extends GrailsLazyProxyPrintWriter {
+        GroovyPageProxyWriterGroup writerGroup;
+
+        GroovyPageProxyWriter(GroovyPageProxyWriterGroup writerGroup, DestinationFactory factory) {
+            super(factory);
+            this.writerGroup = writerGroup;
+        }
+
         public GroovyPageOutputStack getOutputStack() {
             return GroovyPageOutputStack.this;
         }
-    }
 
-    private GroovyPageOutputStack(Writer topWriter, boolean autoSync) {
-        proxyWriter = new GroovyPageProxyWriter();
-        this.autoSync = autoSync;
-        push(topWriter);
-        if (!autoSync) {
-            applyWriterThreadLocals(proxyWriter);
+        @Override
+        public Writer getOut() {
+            writerGroup.activateWriter(this);
+            return super.getOut();
         }
     }
 
+    private GroovyPageOutputStack(GroovyPageOutputStackAttributes attributes) {
+        outWriter = new GroovyPageProxyWriter(writerGroup, new DestinationFactory() {
+            public Writer activateDestination() throws IOException {
+                StackEntry stackEntry = stack.peek();
+                return createEncodingWriter(stackEntry.unwrappedTarget, stackEntry.outEncoder, encodingStateRegistry, GroovyPageConfig.OUT_CODEC_NAME);
+            }
+        });
+        staticWriter = new GroovyPageProxyWriter(writerGroup, new DestinationFactory() {
+            public Writer activateDestination() throws IOException {
+                StackEntry stackEntry = stack.peek();
+                if (stackEntry.staticEncoder == null) {
+                    return stackEntry.unwrappedTarget;
+                }
+                return createEncodingWriter(stackEntry.unwrappedTarget, stackEntry.staticEncoder, encodingStateRegistry, GroovyPageConfig.STATIC_CODEC_NAME);
+            }
+        });
+        expressionWriter = new GroovyPageProxyWriter(writerGroup, new DestinationFactory() {
+            public Writer activateDestination() throws IOException {
+                StackEntry stackEntry = stack.peek();
+                return createEncodingWriter(stackEntry.unwrappedTarget, stackEntry.expressionEncoder, encodingStateRegistry, GroovyPageConfig.EXPRESSION_CODEC_NAME);
+            }
+        });
+        taglibWriter = new GroovyPageProxyWriter(writerGroup, new DestinationFactory() {
+            public Writer activateDestination() throws IOException {
+                StackEntry stackEntry = stack.peek();
+                return createEncodingWriter(stackEntry.unwrappedTarget, stackEntry.taglibEncoder != null ? stackEntry.taglibEncoder : stackEntry.defaultTaglibEncoder, encodingStateRegistry, GroovyPageConfig.TAGLIB_CODEC_NAME);
+            }
+        });
+        this.autoSync = attributes.isAutoSync();
+        push(attributes, false);
+        if (!autoSync) {
+            applyWriterThreadLocals(outWriter);
+        }
+        this.encodingStateRegistry = attributes.getWebRequest().getEncodingStateRegistry();
+    }
+
     private Writer unwrapTargetWriter(Writer targetWriter) {
-        if (targetWriter instanceof GrailsWrappedWriter) {
+        if (targetWriter instanceof GrailsWrappedWriter && ((GrailsWrappedWriter)targetWriter).isAllowUnwrappingOut()) {
             return ((GrailsWrappedWriter)targetWriter).unwrap();
         }
         return targetWriter;
@@ -157,32 +246,92 @@ public final class GroovyPageOutputStack {
     }
 
     public void push(final Writer newWriter, final boolean checkExisting) {
-        if (newWriter == proxyWriter && stack.size() > 0) {
-            stack.push(stack.peek());
-            return;
+        GroovyPageOutputStackAttributes.Builder attributesBuilder=new GroovyPageOutputStackAttributes.Builder();
+        attributesBuilder.inheritPreviousEncoders(true);
+        attributesBuilder.topWriter(newWriter);
+        push(attributesBuilder.build(), checkExisting);
+    }
+
+    public void push(final GroovyPageOutputStackAttributes attributes) {
+        push(attributes, false);
+    }
+
+    public void push(final GroovyPageOutputStackAttributes attributes, final boolean checkExisting) {
+        writerGroup.reset();
+
+        if (checkExisting) checkExistingStack(attributes.getTopWriter());
+
+        StackEntry previousStackEntry = null;
+        if (stack.size() > 0) {
+            previousStackEntry = stack.peek();
         }
 
-        if (checkExisting) {
-            for (WriterPair item : stack) {
-                if (item.originalTarget == newWriter) {
+        Writer topWriter = attributes.getTopWriter();
+        Writer unwrappedWriter = null;
+        if (topWriter!=null) {
+            if (topWriter instanceof GroovyPageProxyWriter) {
+                topWriter = ((GroovyPageProxyWriter)topWriter).getOut();
+            }
+            unwrappedWriter = unwrapTargetWriter(topWriter);
+        } else if (previousStackEntry != null) {
+            topWriter = previousStackEntry.originalTarget;
+            unwrappedWriter = previousStackEntry.unwrappedTarget;
+        } else {
+            throw new NullPointerException("attributes.getTopWriter() is null and there is no previous stack item");
+        }
+
+        StackEntry stackEntry = new StackEntry(topWriter, unwrappedWriter);
+        stackEntry.outEncoder = applyEncoder(attributes.getOutEncoder(), previousStackEntry != null ? previousStackEntry.outEncoder : null, attributes.isInheritPreviousEncoders());
+        stackEntry.staticEncoder = applyEncoder(attributes.getStaticEncoder(), previousStackEntry != null ? previousStackEntry.staticEncoder : null, attributes.isInheritPreviousEncoders());
+        stackEntry.expressionEncoder = applyEncoder(attributes.getExpressionEncoder(), previousStackEntry != null ? previousStackEntry.expressionEncoder : null, attributes.isInheritPreviousEncoders());
+        stackEntry.taglibEncoder = applyEncoder(attributes.getTaglibEncoder(), previousStackEntry != null ? previousStackEntry.taglibEncoder : null, attributes.isInheritPreviousEncoders());
+        stackEntry.defaultTaglibEncoder = applyEncoder(attributes.getDefaultTaglibEncoder(), previousStackEntry != null ? previousStackEntry.defaultTaglibEncoder : null, attributes.isInheritPreviousEncoders());
+
+        stack.push(stackEntry);
+
+        resetWriters();
+
+        if (autoSync) {
+            applyWriterThreadLocals(attributes.getTopWriter());
+        }
+    }
+
+    private Encoder applyEncoder(Encoder newEncoder, Encoder previousEncoder, boolean allowInheriting) {
+        if (newEncoder != null) {
+            return newEncoder;
+        }
+        if (allowInheriting) {
+            return previousEncoder;
+        }
+        return null;
+    }
+
+    private void checkExistingStack(final Writer topWriter) {
+        if (topWriter != null) {
+            for (StackEntry item : stack) {
+                if (item.originalTarget == topWriter) {
                     log.warn("Pushed a writer to stack a second time. Writer type " +
-                            newWriter.getClass().getName(), new Exception());
+                            topWriter.getClass().getName(), new Exception());
                 }
             }
         }
+    }
 
-        Writer unwrappedWriter = unwrapTargetWriter(newWriter);
-        if (unwrappedWriter == proxyWriter && stack.size() > 0) {
-            stack.push(stack.peek());
-            return;
+    private void resetWriters() {
+        outWriter.setDestinationActivated(false);
+        staticWriter.setDestinationActivated(false);
+        expressionWriter.setDestinationActivated(false);
+        taglibWriter.setDestinationActivated(false);
+    }
+
+    private Writer createEncodingWriter(Writer out, Encoder encoder, EncodingStateRegistry encodingStateRegistry, String codecWriterName) {
+        Writer encodingWriter;
+        if (out instanceof EncodedAppenderWriterFactory) {
+            encodingWriter=((EncodedAppenderWriterFactory)out).getWriterForEncoder(encoder, encodingStateRegistry);
+        } else {
+            encodingWriter=new CodecPrintWriter(out, encoder, encodingStateRegistry);
         }
-
-        stack.push(new WriterPair(newWriter, unwrappedWriter));
-
-        proxyWriter.setOut(newWriter);
-        if (autoSync) {
-            applyWriterThreadLocals(newWriter);
-        }
+        return encodingWriter;
     }
 
     public void pop() {
@@ -190,18 +339,51 @@ public final class GroovyPageOutputStack {
     }
 
     public void pop(boolean forceSync) {
+        writerGroup.reset();
         stack.pop();
+        resetWriters();
         if (stack.size() > 0) {
-            WriterPair pair = stack.peek();
-            proxyWriter.setOut(pair.unwrappedTarget);
+            StackEntry stackEntry = stack.peek();
             if (forceSync) {
-                applyWriterThreadLocals(pair.originalTarget);
+                applyWriterThreadLocals(stackEntry.originalTarget);
             }
         }
     }
 
-    public GroovyPageProxyWriter getProxyWriter() {
-        return proxyWriter;
+    public GroovyPageProxyWriter getOutWriter() {
+        return outWriter;
+    }
+
+    public GroovyPageProxyWriter getStaticWriter() {
+        return staticWriter;
+    }
+
+    public GroovyPageProxyWriter getExpressionWriter() {
+        return expressionWriter;
+    }
+
+    public GroovyPageProxyWriter getTaglibWriter() {
+        return taglibWriter;
+    }
+
+    public Encoder getOutEncoder() {
+        return stack.size() > 0 ? stack.peek().outEncoder : null;
+    }
+
+    public Encoder getStaticEncoder() {
+        return stack.size() > 0 ? stack.peek().staticEncoder : null;
+    }
+
+    public Encoder getExpressionEncoder() {
+        return stack.size() > 0 ? stack.peek().expressionEncoder : null;
+    }
+
+    public Encoder getTaglibEncoder() {
+        return stack.size() > 0 ? stack.peek().taglibEncoder : null;
+    }
+
+    public Encoder getDefaultTaglibEncoder() {
+        return stack.size() > 0 ? stack.peek().defaultTaglibEncoder : null;
     }
 
     public Writer getCurrentOriginalWriter() {
@@ -213,10 +395,14 @@ public final class GroovyPageOutputStack {
         applyWriterThreadLocals(originalTopWriter);
     }
 
-    private void    applyWriterThreadLocals(Writer writer) {
-        GrailsWebRequest webRequest = getGrailsWebRequest();
+    private void applyWriterThreadLocals(Writer writer) {
+        GrailsWebRequest webRequest = GrailsWebRequest.lookup();
         if (webRequest != null) {
             webRequest.setOut(writer);
         }
+    }
+
+    public void flushActiveWriter() {
+        writerGroup.flushActive();
     }
 }

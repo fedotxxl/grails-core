@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.compiler.web;
 
 import grails.artefact.Artefact;
@@ -64,6 +63,11 @@ public class MimeTypesTransformer implements GrailsArtefactClassInjector, Annota
 
     public void performInjection(SourceUnit source, ClassNode classNode) {
         performInjection(source,null, classNode);
+    }
+
+    @Override
+    public void performInjectionOnAnnotatedClass(SourceUnit source, ClassNode classNode) {
+        performInjectionOnAnnotatedClass(source, null,classNode);
     }
 
     public boolean shouldInject(URL url) {

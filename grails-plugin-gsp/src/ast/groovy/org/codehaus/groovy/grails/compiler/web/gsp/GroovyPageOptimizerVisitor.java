@@ -1,3 +1,18 @@
+/*
+ * Copyright 2011 SpringSource
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.codehaus.groovy.grails.compiler.web.gsp;
 
 import groovy.lang.Closure;
@@ -33,7 +48,7 @@ class GroovyPageOptimizerVisitor extends CodeVisitorSupport {
     private static final String THISOBJECT = "thisObject";
     private static final String OUT_RECEIVER = "out";
     private static final String PRINT_METHOD = "print";
-    private static final String CODECOUT_RECEIVER = "codecOut";
+    private static final String EXPRESSIONOUT_RECEIVER = "expressionOut";
 
     private Stack<ClosureExpression> innerClosures = new Stack<ClosureExpression>();
     private ClassNode targetGroovyPageNode;
@@ -64,6 +79,7 @@ class GroovyPageOptimizerVisitor extends CodeVisitorSupport {
 //        innerClosures.pop();
 //    }
 
+    @SuppressWarnings("unused")
     private void introduceThisObjectVariable(ClosureExpression closureExpression) {
         if (closureExpression.getCode() instanceof BlockStatement) {
             List<Statement> oldBlock = ((BlockStatement)closureExpression.getCode()).getStatements();
@@ -95,10 +111,11 @@ class GroovyPageOptimizerVisitor extends CodeVisitorSupport {
 
     private boolean isCallFromOutOrCodecOut(MethodCallExpression expression) {
         return (expression.getObjectExpression().getText().equals(OUT_RECEIVER)
-                || expression.getObjectExpression().getText().equals(CODECOUT_RECEIVER))
+                || expression.getObjectExpression().getText().equals(EXPRESSIONOUT_RECEIVER))
                 && expression.getMethodAsString().equals(PRINT_METHOD);
     }
 
+    @SuppressWarnings("unused")
     private void proceedCallFromGroovyPageClass(MethodCallExpression call) {
         List<MethodNode> methodNodeList = groovyPageClassNode.getMethods(call.getMethodAsString());
 

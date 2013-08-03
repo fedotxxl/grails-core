@@ -1,18 +1,20 @@
+def tomcatVersion = '7.0.41'
 dependencies {
 
     compile "org.springframework:spring-jdbc:${springVersion}"
-    compile ('commons-pool:commons-pool:1.5.6') {
-        exclude group: 'commons-logging', module:'commons-logging'
+
+    compile "org.apache.tomcat:tomcat-jdbc:$tomcatVersion", {
+        exclude group:'org.apache.tomcat', module:'tomcat-juli'
     }
-    compile ('commons-dbcp:commons-dbcp:1.4') {
-        exclude group: 'commons-logging', module:'commons-logging'
+    runtime "org.apache.tomcat.embed:tomcat-embed-logging-log4j:$tomcatVersion"
+
+    runtime 'hsqldb:hsqldb:1.8.0.10', {
+        ext.notInPom = true
     }
 
-    runtime 'hsqldb:hsqldb:1.8.0.10',
-            'com.h2database:h2:1.3.164'
+    runtime 'com.h2database:h2:1.3.170', {
+        ext.notInPom = true
+    }
 
-    compile project(":grails-core"),
-            project(':grails-bootstrap')
+    compile project(":grails-core")
 }
-
-jar.appendix = 'plugin-datasource'

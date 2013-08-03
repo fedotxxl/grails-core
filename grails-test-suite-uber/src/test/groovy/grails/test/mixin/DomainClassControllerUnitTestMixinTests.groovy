@@ -2,8 +2,8 @@ package grails.test.mixin
 
 import grails.converters.XML
 import grails.persistence.Entity
+
 import org.junit.Test
-import grails.validation.ValidationErrors
 
 /**
  * A Junit 4 test that tests a scaffolded controllers logic using the new mixins
@@ -57,7 +57,7 @@ class DomainClassControllerUnitTestMixinTests {
         assert book.validate() == false
 
         assert book.errors.allErrors.size() == 1
-        assert book.errors['title'].code == 'blank'
+        assert book.errors['title'].code == 'nullable'
 
         book.clearErrors()
 
@@ -126,7 +126,6 @@ class DomainClassControllerUnitTestMixinTests {
 
         assert flash.message != null
         assert response.redirectedUrl == '/book/list'
-
 
         def book = new Book(title:"")
 

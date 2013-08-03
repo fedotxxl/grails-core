@@ -155,7 +155,6 @@ public class GrailsRuntimeConfigurator implements ApplicationContextAware {
 
             pluginManager.doRuntimeConfiguration(webSpringConfig);
 
-            // configure scaffolding
             LOG.debug("[RuntimeConfiguration] Processing additional external configurations");
 
             if (loadExternalBeans) {
@@ -186,8 +185,7 @@ public class GrailsRuntimeConfigurator implements ApplicationContextAware {
         return ctx;
     }
 
-    protected WebRuntimeSpringConfiguration createWebRuntimeSpringConfiguration(
-            @SuppressWarnings("unused") GrailsApplication app,
+    protected WebRuntimeSpringConfiguration createWebRuntimeSpringConfiguration(GrailsApplication app,
             ApplicationContext parentCtx, ClassLoader classLoader) {
         return new WebRuntimeSpringConfiguration(parentCtx, classLoader);
     }
@@ -206,8 +204,7 @@ public class GrailsRuntimeConfigurator implements ApplicationContextAware {
         }
     }
 
-    public void reconfigure(GrailsApplicationContext current,
-            @SuppressWarnings("unused") ServletContext servletContext, boolean loadExternalBeans) {
+    public void reconfigure(GrailsApplicationContext current, ServletContext servletContext, boolean loadExternalBeans) {
         RuntimeSpringConfiguration springConfig = parent != null ? new DefaultRuntimeSpringConfiguration(parent) : new DefaultRuntimeSpringConfiguration();
         Assert.state(pluginManager.isInitialised(),
                 "Cannot re-configure Grails application when it hasn't even been configured yet!");
@@ -248,6 +245,9 @@ public class GrailsRuntimeConfigurator implements ApplicationContextAware {
 
         if (pluginManager.hasGrailsPlugin("hibernate")) {
             pluginManager.doRuntimeConfiguration("hibernate", springConfig);
+        }
+        else if (pluginManager.hasGrailsPlugin("hibernate4")) {
+            pluginManager.doRuntimeConfiguration("hibernate4", springConfig);
         }
 
         WebApplicationContext ctx = (WebApplicationContext) springConfig.getApplicationContext();
@@ -378,7 +378,7 @@ public class GrailsRuntimeConfigurator implements ApplicationContextAware {
         doLoadSpringGroovyResources(config, application, context);
     }
 
-    public void setLoadExternalPersistenceConfig(@SuppressWarnings("unused") boolean b) {
+    public void setLoadExternalPersistenceConfig(boolean b) {
         // do nothing
     }
 

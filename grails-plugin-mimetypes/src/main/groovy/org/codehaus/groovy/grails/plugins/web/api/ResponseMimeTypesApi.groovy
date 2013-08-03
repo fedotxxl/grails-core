@@ -15,8 +15,11 @@
  */
 package org.codehaus.groovy.grails.plugins.web.api
 
+import groovy.transform.CompileStatic
+
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
+
 import org.codehaus.groovy.grails.commons.GrailsApplication
 import org.codehaus.groovy.grails.web.mime.DefaultAcceptHeaderParser
 import org.codehaus.groovy.grails.web.mime.MimeType
@@ -24,17 +27,22 @@ import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes
 import org.codehaus.groovy.grails.web.servlet.HttpHeaders
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
 
+import java.util.regex.Pattern
+
 /**
  * Methods added to {@link javax.servlet.http.HttpServletResponse} for response format handling.
  *
  * @author Graeme Rocher
  * @since 2.0
  */
+@CompileStatic
 class ResponseMimeTypesApi {
 
     GrailsApplication grailsApplication
     MimeType[] mimeTypes
-    private boolean useAcceptHeader
+    // The ACCEPT header will not be used for content negotiation for user agents containing the following strings (defaults to the 4 major rendering engines)
+    protected Pattern disableForUserAgents = ~/(Gecko(?i)|WebKit(?i)|Presto(?i)|Trident(?i))/
+    protected boolean useAcceptHeader
 
     MimeTypesApiSupport apiSupport = new MimeTypesApiSupport()
 
@@ -49,13 +57,21 @@ class ResponseMimeTypesApi {
     /**
      * Initialize with settings provided by GrailsApplication and the given MimeType[]
      *
-     * @param grailsApplication The GrailsApplication
+     * @param application The GrailsApplication
      * @param mimeTypes The mime types
      */
-    ResponseMimeTypesApi(GrailsApplication grailsApplication, MimeType[] mimeTypes) {
-        this.grailsApplication = grailsApplication
-        this.mimeTypes = mimeTypes
-        this.useAcceptHeader = grailsApplication.flatConfig.get("grails.mime.use.accept.header") ? true : false
+    ResponseMimeTypesApi(GrailsApplication application, MimeType[] types) {
+        grailsApplication = application
+        mimeTypes = types
+        final config = grailsApplication.flatConfig
+        final useAcceptHeader = config.get("grails.mime.use.accept.header")
+        this.useAcceptHeader = useAcceptHeader instanceof Boolean ? useAcceptHeader : true
+        final disableForUserAgentsConfig = config.get('grails.mime.disable.accept.header.userAgents')
+        if (disableForUserAgentsConfig instanceof Collection) {
+            final userAgents = disableForUserAgentsConfig.join('(?i)|')
+            this.disableForUserAgents = Pattern.compile("(${userAgents})")
+        }
+
     }
 
     /**
@@ -70,11 +86,38 @@ class ResponseMimeTypesApi {
         HttpServletRequest request = webRequest.getCurrentRequest()
         def result = request.getAttribute(GrailsApplicationAttributes.RESPONSE_FORMAT)
         if (!result) {
+            final mimeType = getMimeType(response)
+            if (mimeType) {
+                result = mimeType.extension
+                request.setAttribute(GrailsApplicationAttributes.RESPONSE_FORMAT, result)
+            }
+        }
+        return result
+    }
+
+    /**
+     * Obtains the MimeType for the response using either the file extension or the ACCEPT header
+     *
+     * @param response The response
+     * @return The MimeType
+     */
+    MimeType getMimeType(HttpServletResponse response) {
+        final webRequest = GrailsWebRequest.lookup()
+        return getMimeTypeForRequest(webRequest)
+    }
+
+    MimeType getMimeTypeForRequest(GrailsWebRequest webRequest) {
+        HttpServletRequest request = webRequest.getCurrentRequest()
+        MimeType result = (MimeType) request.getAttribute(GrailsApplicationAttributes.RESPONSE_MIME_TYPE)
+        if (!result) {
             def formatOverride = webRequest?.params?.format
+            if (!formatOverride) {
+                formatOverride = request.getAttribute(GrailsApplicationAttributes.RESPONSE_FORMAT)
+            }
             if (formatOverride) {
                 def allMimes = getMimeTypes()
-                MimeType mime = allMimes.find { it.extension == formatOverride }
-                result = mime ? mime.extension : getMimeTypes()[0].extension
+                MimeType mime = allMimes.find { MimeType it -> it.extension == formatOverride }
+                result = mime ? mime : getMimeTypes()[0]
 
                 // Save the evaluated format as a request attribute.
                 // This is a blatant hack because we should to this
@@ -87,11 +130,11 @@ class ResponseMimeTypesApi {
                 //   - which initialises the CONTENT_FORMAT attribute
                 //   - *before* the "format" parameter is added to the map
                 //   - so the saved format is wrong
-                request.setAttribute(GrailsApplicationAttributes.RESPONSE_FORMAT, result)
+                request.setAttribute(GrailsApplicationAttributes.RESPONSE_MIME_TYPE, result)
+            } else {
+                result = getMimeTypesInternal(request)[0]
             }
-            else {
-                result = getMimeTypesInternal(request, response)[0].extension
-            }
+
         }
         return result
     }
@@ -103,7 +146,7 @@ class ResponseMimeTypesApi {
      * @return The configured mime types
      */
     MimeType[] getMimeTypes(HttpServletResponse response) {
-        return getMimeTypesInternal(GrailsWebRequest.lookup().currentRequest, response)
+        return getMimeTypesInternal(GrailsWebRequest.lookup().currentRequest)
     }
 
     /**
@@ -117,18 +160,19 @@ class ResponseMimeTypesApi {
         apiSupport.withFormat(response, callable)
     }
 
-    private MimeType[] getMimeTypesInternal(HttpServletRequest request, HttpServletResponse response) {
-        MimeType[] result = request.getAttribute(GrailsApplicationAttributes.RESPONSE_FORMATS)
+    private MimeType[] getMimeTypesInternal(HttpServletRequest request) {
+        MimeType[] result = (MimeType[])request.getAttribute(GrailsApplicationAttributes.RESPONSE_FORMATS)
         if (!result) {
 
             def userAgent = request.getHeader(HttpHeaders.USER_AGENT)
             def msie = userAgent && userAgent ==~ /msie(?i)/ ?: false
 
-            def parser = new DefaultAcceptHeaderParser(grailsApplication)
-            parser.configuredMimeTypes = getMimeTypes()
-            def header = null
+            def parser = new DefaultAcceptHeaderParser(getMimeTypes())
+            String header = null
+
+            boolean disabledForUserAgent = userAgent ? disableForUserAgents.matcher(userAgent).find() : false
             if (msie) header = "*/*"
-            if (!header && useAcceptHeader) header = request.getHeader(HttpHeaders.ACCEPT)
+            if (!header && useAcceptHeader && !disabledForUserAgent) header = request.getHeader(HttpHeaders.ACCEPT)
             result = parser.parse(header)
 
             // GRAILS-8341 - If no header the parser would have returned all configured mime types.  Since no format

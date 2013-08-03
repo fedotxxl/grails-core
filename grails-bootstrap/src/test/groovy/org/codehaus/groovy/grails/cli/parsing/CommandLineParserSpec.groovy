@@ -1,7 +1,9 @@
 package org.codehaus.groovy.grails.cli.parsing
 
-import grails.util.Environment;
-import spock.lang.Shared;
+import grails.util.Environment
+
+import spock.lang.Ignore
+import spock.lang.Shared
 import spock.lang.Specification
 
 /**
@@ -15,7 +17,7 @@ class CommandLineParserSpec extends Specification {
 
     def setup() {
         // set grails.env=development before each test
-        System.setProperty(Environment.KEY, "development");
+        System.setProperty(Environment.KEY, "development")
     }
 
     def setupSpec() {
@@ -143,6 +145,7 @@ class CommandLineParserSpec extends Specification {
             cl.optionValue('host') == "localhost"
     }
 
+    @Ignore
     void "Test help message with declared options"() {
         when:
             def parser = new CommandLineParser()
@@ -150,12 +153,11 @@ class CommandLineParserSpec extends Specification {
             parser.addOption("version", "Shows the vesrion")
 
         then:
-            String ls = System.getProperty("line.separator");
+            String ls = System.getProperty("line.separator")
             parser.optionsHelpMessage == "Available options:${ls} -interactive-mode        Enabled interactive mode${ls} -version                 Shows the vesrion${ls}"
     }
 
     // STRING tests
-
 
     void "Test parse string basic command"() {
         when:
@@ -208,7 +210,6 @@ class CommandLineParserSpec extends Specification {
             cl.remainingArgs == ['foo', 'bar']
             cl.remainingArgsString == "foo bar"
     }
-
 
     void "Test parse string command with environment, sys props, arguments and undeclared options"() {
        when:

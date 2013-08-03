@@ -22,12 +22,11 @@ import org.grails.datastore.gorm.support.BeforeValidateHelper
 import org.springframework.validation.FieldError
 import org.springframework.web.context.support.WebApplicationContextUtils
 
-
 class ValidationSupport {
 
     static final beforeValidateHelper = new BeforeValidateHelper()
-    
-    static validateInstance(object, List fieldsToValidate = null) {
+
+    static boolean validateInstance(object, List fieldsToValidate = null) {
         beforeValidateHelper.invokeBeforeValidate(object, fieldsToValidate)
 
         if (!object.hasProperty('constraints')) {
@@ -35,9 +34,8 @@ class ValidationSupport {
         }
 
         def constraints = object.constraints
-
         if (constraints) {
-            def ctx = null
+            def ctx
 
             def sch = ServletContextHolder.servletContext
             if (sch) {
@@ -48,9 +46,9 @@ class ValidationSupport {
             def localErrors = new ValidationErrors(object, object.class.name)
             def originalErrors = object.errors
             for (originalError in originalErrors.allErrors) {
-                if(originalError instanceof FieldError) {
+                if (originalError instanceof FieldError) {
                     if (originalErrors.getFieldError(originalError.field)?.bindingFailure) {
-                        localErrors.rejectValue originalError.field, originalError.code, originalError.arguments, originalError.defaultMessage
+                        localErrors.addError originalError
                     }
                 } else {
                     localErrors.addError originalError

@@ -13,19 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.plugins.publishing
 
+import grails.util.BuildSettings
 import grails.util.GrailsUtil
 import groovy.xml.MarkupBuilder
-import org.codehaus.groovy.grails.documentation.DocumentationContext
-import org.codehaus.groovy.grails.documentation.DocumentedMethod
-import org.codehaus.groovy.grails.documentation.DocumentedProperty
-import grails.util.BuildSettings
-import org.apache.ivy.core.module.descriptor.DependencyDescriptor
-import org.apache.ivy.plugins.resolver.URLResolver
-import org.apache.ivy.plugins.resolver.IBiblioResolver
-import org.codehaus.groovy.grails.resolve.GrailsRepoResolver
 import org.codehaus.groovy.grails.io.support.Resource
 import org.springframework.util.AntPathMatcher
 
@@ -89,9 +81,9 @@ class PluginDescriptorGenerator {
         if (!commonResourceBase) return false
 
         if (r.file.absolutePath.indexOf(commonResourceBase.absolutePath) == 0) {
-            String path = r.file.absolutePath.substring(commonResourceBase.absolutePath.length()+1)
+            String path = r.file.absolutePath.substring(commonResourceBase.absolutePath.length()+1).tr(File.separator, "/")
             for(String pattern : pluginExcludes) {
-                if (antPathMatcher.match(pattern, path)) return true
+                if (antPathMatcher.match(pattern.tr(File.separator, "/"), path)) return true
             }
 
         }
@@ -144,90 +136,6 @@ class PluginDescriptorGenerator {
                         def name = matcher[0][1].replaceAll('/', /\./)
                         if (!excludes.contains(name) && !matchesPluginExcludes(pluginExcludes, commonResourceBase, r)) {
                             xml.resource(name)
-                        }
-                    }
-                }
-                final dependencyManager = buildSettings?.dependencyManager
-                if (dependencyManager) {
-                    repositories {
-                        final resolvers = dependencyManager.chainResolver.resolvers
-                        for (r in resolvers) {
-                            if (r instanceof IBiblioResolver) {
-                                xml.repository(name:r.name, url:r.root )
-                            }
-                            else if (r instanceof GrailsRepoResolver) {
-                                xml.repository(name:r.name, url:r.repositoryRoot.toString() )
-                            }
-                        }
-                    }
-                    final scopes = dependencyManager.configurationNames
-                    dependencies {
-                        for (scope in scopes) {
-
-                            final jarDependencies = dependencyManager.getApplicationDependencyDescriptors(scope)
-
-                            if (jarDependencies) {
-                                xml."$scope" {
-                                    for (DependencyDescriptor dd in jarDependencies) {
-                                        final mrid = dd.dependencyRevisionId
-                                        xml.dependency(group:mrid.organisation, name:mrid.name, version:mrid.revision)
-                                    }
-                                }
-                            }
-
-                        }
-                    }
-                    plugins {
-                        for (scope in scopes) {
-
-                            final pluginDependencies = dependencyManager.getApplicationPluginDependencyDescriptors(scope)
-                            if (pluginDependencies) {
-                                xml."$scope" {
-                                    for (DependencyDescriptor dd in pluginDependencies) {
-                                        final mrid = dd.dependencyRevisionId
-                                        xml.plugin(group:mrid.organisation, name:mrid.name, version:mrid.revision)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                runtimePluginRequirements {
-                    if (pluginProps["dependsOn"]) {
-                        for (d in pluginProps.dependsOn) {
-                            delegate.plugin(name: d.key, version: d.value)
-                        }
-                    }
-                }
-
-                def docContext = DocumentationContext.instance
-                if (docContext) {
-                    behavior {
-                        for (DocumentedMethod m in docContext.methods) {
-                            method(name: m.name, artefact: m.artefact, type: m.type.name) {
-                                description m.text
-                                if (m.arguments) {
-                                    for (arg in m.arguments) {
-                                        argument type: arg.name
-                                    }
-                                }
-                            }
-                        }
-                        for (DocumentedMethod m in docContext.staticMethods) {
-                            'static-method'(name: m.name, artefact: m.artefact, type: m.type.name) {
-                                description m.text
-                                if (m.arguments) {
-                                    for (arg in m.arguments) {
-                                        argument type: arg.name
-                                    }
-                                }
-                            }
-                        }
-                        for (DocumentedProperty p in docContext.properties) {
-                            property(name: p.name, type: p.type.name, artefact: p.artefact) {
-                                description p.text
-                            }
                         }
                     }
                 }

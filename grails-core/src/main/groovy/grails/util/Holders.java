@@ -1,4 +1,5 @@
-/* Copyright 2011 SpringSource.
+/*
+ * Copyright 2011 SpringSource.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +56,16 @@ public class Holders {
         // static only
     }
 
+    public static void clear() {
+        resourceLoaders.set(null);
+        pluginManagers.set(null);
+        pluginManagersInCreation.set(null);
+        configs.set(null);
+        if (servletContexts != null) {
+            servletContexts.set(null);
+        }
+    }
+
     public static void setServletContext(final ServletContext servletContext) {
         servletContexts.set(servletContext);
     }
@@ -65,6 +76,18 @@ public class Holders {
 
     public static ApplicationContext getApplicationContext() {
         return WebApplicationContextUtils.getRequiredWebApplicationContext(getServletContext());
+    }
+
+    /**
+     *
+     * @return The ApplicationContext or null if it doesn't exist
+     */
+    public static ApplicationContext findApplicationContext() {
+        ServletContext servletContext = getServletContext();
+        if(servletContext != null) {
+            return WebApplicationContextUtils.getWebApplicationContext(servletContext);
+        }
+        return null;
     }
 
     public static GrailsApplication getGrailsApplication() {

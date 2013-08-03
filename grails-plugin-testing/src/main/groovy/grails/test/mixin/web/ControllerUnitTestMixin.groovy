@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package grails.test.mixin.web
 
 import grails.artefact.Enhanced
@@ -23,27 +22,36 @@ import grails.test.mixin.support.LazyTagLibraryLookup
 import grails.util.GrailsWebUtil
 import grails.web.CamelCaseUrlConverter
 import grails.web.HyphenatedUrlConverter
-
-import javax.servlet.http.HttpServletResponse
+import groovy.transform.CompileStatic
 
 import org.codehaus.groovy.grails.commons.ControllerArtefactHandler
+import org.codehaus.groovy.grails.commons.GrailsClass
+import org.codehaus.groovy.grails.commons.GrailsControllerClass
 import org.codehaus.groovy.grails.commons.UrlMappingsArtefactHandler
 import org.codehaus.groovy.grails.commons.metaclass.MetaClassEnhancer
+import org.codehaus.groovy.grails.plugins.CodecsGrailsPlugin
+import org.codehaus.groovy.grails.plugins.codecs.DefaultCodecLookup
 import org.codehaus.groovy.grails.plugins.converters.ConvertersGrailsPlugin
 import org.codehaus.groovy.grails.plugins.converters.ConvertersPluginSupport
 import org.codehaus.groovy.grails.plugins.converters.api.ConvertersControllersApi
 import org.codehaus.groovy.grails.plugins.testing.GrailsMockHttpServletRequest
 import org.codehaus.groovy.grails.plugins.testing.GrailsMockHttpServletResponse
 import org.codehaus.groovy.grails.plugins.web.ServletsGrailsPluginSupport
-import org.codehaus.groovy.grails.plugins.web.api.*
+import org.codehaus.groovy.grails.plugins.web.api.ControllerTagLibraryApi
+import org.codehaus.groovy.grails.plugins.web.api.ControllersApi
+import org.codehaus.groovy.grails.plugins.web.api.ControllersMimeTypesApi
+import org.codehaus.groovy.grails.plugins.web.api.RequestMimeTypesApi
+import org.codehaus.groovy.grails.plugins.web.api.ResponseMimeTypesApi
 import org.codehaus.groovy.grails.plugins.web.mimes.MimeTypesFactoryBean
 import org.codehaus.groovy.grails.plugins.web.mimes.MimeTypesGrailsPlugin
+import org.codehaus.groovy.grails.web.context.ServletContextHolder
 import org.codehaus.groovy.grails.web.mapping.DefaultLinkGenerator
 import org.codehaus.groovy.grails.web.mapping.UrlMappingsHolderFactoryBean
 import org.codehaus.groovy.grails.web.mime.MimeType
+import org.codehaus.groovy.grails.web.pages.FilteringCodecsByContentTypeSettings
 import org.codehaus.groovy.grails.web.pages.GroovyPageUtils
 import org.codehaus.groovy.grails.web.pages.GroovyPagesTemplateEngine
-import org.codehaus.groovy.grails.web.pages.GroovyPagesTemplateRenderer;
+import org.codehaus.groovy.grails.web.pages.GroovyPagesTemplateRenderer
 import org.codehaus.groovy.grails.web.pages.discovery.GrailsConventionGroovyPageLocator
 import org.codehaus.groovy.grails.web.pages.ext.jsp.TagLibraryResolver
 import org.codehaus.groovy.grails.web.plugins.support.WebMetaUtils
@@ -51,29 +59,23 @@ import org.codehaus.groovy.grails.web.servlet.FlashScope
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsParameterMap
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
+import org.grails.plugins.web.rest.api.ControllersRestApi
+import org.grails.plugins.web.rest.render.DefaultRendererRegistry
 import org.junit.After
 import org.junit.AfterClass
 import org.junit.Before
 import org.junit.BeforeClass
-import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
+import org.springframework.beans.factory.config.AutowireCapableBeanFactory
 import org.springframework.mock.web.MockHttpSession
 import org.springframework.mock.web.MockServletContext
 import org.springframework.util.ClassUtils
 import org.springframework.web.context.WebApplicationContext
 import org.springframework.web.context.request.RequestContextHolder
 import org.springframework.web.multipart.commons.CommonsMultipartResolver
-import org.codehaus.groovy.grails.plugins.codecs.HTMLCodec
-import org.codehaus.groovy.grails.plugins.codecs.JavaScriptCodec
-import org.codehaus.groovy.grails.plugins.codecs.HexCodec
-import org.codehaus.groovy.grails.plugins.codecs.MD5Codec
-import org.codehaus.groovy.grails.plugins.codecs.SHA1Codec
-import org.codehaus.groovy.grails.plugins.codecs.SHA256Codec
-import org.codehaus.groovy.grails.plugins.codecs.URLCodec
-import org.codehaus.groovy.grails.plugins.codecs.Base64Codec
-import org.codehaus.groovy.grails.web.context.ServletContextHolder
+import org.springframework.context.ApplicationContext
 
 /**
- * A mixin that can be applied to a unit test in order to test controllers.
+ * Applied to a unit test to test controllers.
  *
  * @author Graeme Rocher
  * @since 2.0
@@ -118,6 +120,13 @@ class ControllerUnitTestMixin extends GrailsUnitTestMixin {
     }
 
     /**
+     * @return The status code of the response
+     */
+    int getStatus() {
+        response.status
+    }
+
+    /**
      * The Grails 'params' object which is an instance of {@link GrailsParameterMap}
      */
     GrailsParameterMap getParams() {
@@ -128,8 +137,7 @@ class ControllerUnitTestMixin extends GrailsUnitTestMixin {
      * @return The model of the current controller
      */
     Map getModel() {
-        final controller = webRequest.currentRequest.getAttribute(GrailsApplicationAttributes.CONTROLLER)
-        return controller?.modelAndView?.model ?: [:]
+        webRequest.currentRequest.getAttribute(GrailsApplicationAttributes.CONTROLLER)?.modelAndView?.model ?: [:]
     }
 
     /**
@@ -147,7 +155,7 @@ class ControllerUnitTestMixin extends GrailsUnitTestMixin {
             GroovyPageUtils.getViewURI(webRequest.controllerName, webRequest.actionName)
         }
         else {
-            return null;
+            return null
         }
     }
 
@@ -174,6 +182,10 @@ class ControllerUnitTestMixin extends GrailsUnitTestMixin {
         defineBeans(new ConvertersGrailsPlugin().doWithSpring)
         defineBeans {
             instanceControllersApi(ControllersApi)
+            final rendererRegistry = new DefaultRendererRegistry()
+            rendererRegistry.modelSuffix = config.flatten().get('grails.scaffolding.templates.domainSuffix') ?: ''
+            rendererRegistry.initialize()
+            instanceControllersRestApi(ControllersRestApi, rendererRegistry, ref("instanceControllersApi"), new ControllersMimeTypesApi())
             instanceControllerTagLibraryApi(ControllerTagLibraryApi)
 
             def urlConverterType = config?.grails?.web?.url?.converter
@@ -194,8 +206,8 @@ class ControllerUnitTestMixin extends GrailsUnitTestMixin {
             def lazyBean = { bean ->
                 bean.lazyInit = true
             }
-            jspTagLibraryResolver(TagLibraryResolver,lazyBean)
-            gspTagLibraryLookup(LazyTagLibraryLookup,lazyBean)
+            jspTagLibraryResolver(TagLibraryResolver, lazyBean)
+            gspTagLibraryLookup(LazyTagLibraryLookup, lazyBean)
             groovyPageLocator(GrailsConventionGroovyPageLocator) {
                 resourceLoader = new GroovyPageUnitTestResourceLoader(groovyPages)
             }
@@ -211,54 +223,57 @@ class ControllerUnitTestMixin extends GrailsUnitTestMixin {
                 groovyPageLocator = ref("groovyPageLocator")
                 groovyPagesTemplateEngine = ref("groovyPagesTemplateEngine")
             }
+
+            filteringCodecsByContentTypeSettings(FilteringCodecsByContentTypeSettings, ref('grailsApplication'))
         }
+        defineBeans(new CodecsGrailsPlugin().doWithSpring)
 
         applicationContext.getBean("convertersConfigurationInitializer").initialize(grailsApplication)
     }
 
     @AfterClass
+    @CompileStatic
     static void cleanupGrailsWeb() {
         servletContext = null
         ServletContextHolder.setServletContext(null)
     }
 
     @Before
+    @CompileStatic
     void bindGrailsWebRequest() {
-        mockCodec(Base64Codec)
-        mockCodec(HTMLCodec)
-        mockCodec(URLCodec)
-        mockCodec(JavaScriptCodec)
-        mockCodec(HexCodec)
-        mockCodec(MD5Codec)
-        mockCodec(SHA1Codec)
-        mockCodec(SHA256Codec)
-
-        if (webRequest == null) {
-            webRequest = GrailsWebRequest.lookup()
-            if (webRequest == null || !(webRequest.currentRequest instanceof GrailsMockHttpServletRequest)) {
-
-                if (!applicationContext.isActive()) {
-                    applicationContext.refresh()
-                }
-
-                applicationContext.servletContext = servletContext
-
-                ServletsGrailsPluginSupport.enhanceServletApi()
-                ConvertersPluginSupport.enhanceApplication(grailsApplication,applicationContext)
-
-                request = new GrailsMockHttpServletRequest(requestMimeTypesApi:  new TestRequestMimeTypesApi(grailsApplication: grailsApplication))
-                response = new GrailsMockHttpServletResponse(responseMimeTypesApi: new TestResponseMimeTypesApi(grailsApplication: grailsApplication))
-                webRequest = GrailsWebUtil.bindMockWebRequest(applicationContext, request, response)
-                request = webRequest.getCurrentRequest()
-                response = webRequest.getCurrentResponse()
-                servletContext = webRequest.getServletContext()
-            }
-            else {
-                request = webRequest.currentRequest
-                response = webRequest.currentResponse
-                servletContext = webRequest.servletContext
-            }
+        new CodecsGrailsPlugin().providedArtefacts.each { Class codecClass ->
+            mockCodec(codecClass)
         }
+
+        applicationContext.getBean(DefaultCodecLookup).reInitialize()
+
+        if (webRequest != null) {
+            return
+        }
+
+        webRequest = GrailsWebRequest.lookup()
+        if (webRequest?.currentRequest instanceof GrailsMockHttpServletRequest) {
+            request = (GrailsMockHttpServletRequest)webRequest.currentRequest
+            response = (GrailsMockHttpServletResponse)webRequest.currentResponse
+            servletContext = (MockServletContext)webRequest.servletContext
+            return
+        }
+
+        if (!applicationContext.isActive()) {
+            applicationContext.refresh()
+        }
+
+        applicationContext.servletContext = servletContext
+
+        ServletsGrailsPluginSupport.enhanceServletApi()
+        ConvertersPluginSupport.enhanceApplication(grailsApplication,applicationContext)
+
+        request = new GrailsMockHttpServletRequest(requestMimeTypesApi:  new TestRequestMimeTypesApi(applicationContext: applicationContext))
+        response = new GrailsMockHttpServletResponse(responseMimeTypesApi: new TestResponseMimeTypesApi(applicationContext: applicationContext))
+        webRequest = GrailsWebUtil.bindMockWebRequest(applicationContext, request, response)
+        request = (GrailsMockHttpServletRequest)webRequest.getCurrentRequest()
+        response = (GrailsMockHttpServletResponse)webRequest.getCurrentResponse()
+        servletContext = (MockServletContext)webRequest.getServletContext()
     }
 
     /**
@@ -281,20 +296,10 @@ class ControllerUnitTestMixin extends GrailsUnitTestMixin {
         if (webRequest == null) {
             bindGrailsWebRequest()
         }
-        final controllerArtefact = grailsApplication.addArtefact(ControllerArtefactHandler.TYPE, controllerClass)
-        controllerArtefact.initialize()
-        if (!controllerClass.getAnnotation(Enhanced)) {
-            MetaClassEnhancer enhancer = new MetaClassEnhancer()
-
-            enhancer.addApi(new ControllersApi())
-            enhancer.addApi(new ConvertersControllersApi())
-            enhancer.addApi(new ControllerTagLibraryApi())
-            enhancer.addApi(new ControllersMimeTypesApi())
-            enhancer.enhance(controllerClass.metaClass)
-        }
+        GrailsClass controllerArtefact = createAndEnhance(controllerClass)
 
         defineBeans {
-            "${controllerClass.name}"(controllerClass) { bean ->
+            "$controllerClass.name"(controllerClass) { bean ->
                 bean.scope = 'prototype'
                 bean.autowire = true
             }
@@ -306,9 +311,26 @@ class ControllerUnitTestMixin extends GrailsUnitTestMixin {
             request.setAttribute(GrailsApplicationAttributes.CONTROLLER, controller)
             controller
         }
+
         controllerClass.metaClass.constructor = callable
 
         return callable.call()
+    }
+
+    @CompileStatic
+    protected GrailsClass createAndEnhance(Class controllerClass) {
+        final GrailsControllerClass controllerArtefact = (GrailsControllerClass)grailsApplication.addArtefact(ControllerArtefactHandler.TYPE, controllerClass)
+        controllerArtefact.initialize()
+        if (!controllerClass.getAnnotation(Enhanced)) {
+            MetaClassEnhancer enhancer = new MetaClassEnhancer()
+
+            enhancer.addApi(new ControllersApi())
+            enhancer.addApi(new ConvertersControllersApi())
+            enhancer.addApi(new ControllerTagLibraryApi())
+            enhancer.addApi(new ControllersMimeTypesApi())
+            enhancer.enhance(controllerClass.metaClass)
+        }
+        controllerArtefact
     }
 
     /**
@@ -327,37 +349,43 @@ class ControllerUnitTestMixin extends GrailsUnitTestMixin {
 
     @After
     void clearGrailsWebRequest() {
-        def ctx = webRequest?.applicationContext
         webRequest = null
         request = null
         response = null
         RequestContextHolder.setRequestAttributes(null)
         views.clear()
+        def ctx = webRequest?.applicationContext
         if (ctx?.containsBean("groovyPagesTemplateEngine")) {
-            ctx?.getBean("groovyPagesTemplateEngine")?.clearPageCache()
+            ctx.groovyPagesTemplateEngine.clearPageCache()
         }
         if (ctx?.containsBean("grovyPagesTemplateRenderer")) {
-            ctx?.getBean("groovyPagesTemplateRenderer")?.clearCache()
+            ctx.groovyPagesTemplateRenderer.clearCache()
         }
     }
 }
 
+@CompileStatic
 class TestResponseMimeTypesApi extends ResponseMimeTypesApi {
+
+    ApplicationContext applicationContext
 
     @Override
     MimeType[] getMimeTypes() {
-        def factory = new MimeTypesFactoryBean(grailsApplication:grailsApplication)
-        factory.afterPropertiesSet()
+        def factory = new MimeTypesFactoryBean()
+        factory.applicationContext = applicationContext
         return factory.getObject()
     }
 }
 
+@CompileStatic
 class TestRequestMimeTypesApi extends RequestMimeTypesApi {
+
+    ApplicationContext applicationContext
 
     @Override
     MimeType[] getMimeTypes() {
-        def factory = new MimeTypesFactoryBean(grailsApplication:grailsApplication)
-        factory.afterPropertiesSet()
+        def factory = new MimeTypesFactoryBean()
+        factory.applicationContext = applicationContext
         return factory.getObject()
     }
 }

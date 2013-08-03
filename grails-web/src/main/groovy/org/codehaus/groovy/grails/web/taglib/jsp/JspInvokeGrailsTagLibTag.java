@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,7 +177,7 @@ public class JspInvokeGrailsTagLibTag extends BodyTagSupport implements DynamicA
             throw new GrailsTagException("Tag [" + getTagName() + "] does not exist. No tag library found.");
         }
 
-        sw = new FastStringPrintWriter();
+        sw = FastStringPrintWriter.newInstance();
         out = sw;
         tagLib.setProperty(OUT_PROPERTY, out);
         Object tagLibProp;

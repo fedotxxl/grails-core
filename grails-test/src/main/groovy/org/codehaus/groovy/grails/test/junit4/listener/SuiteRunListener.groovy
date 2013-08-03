@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.test.junit4.listener
 
 import org.codehaus.groovy.grails.test.io.SystemOutAndErrSwapper
@@ -29,6 +28,7 @@ import org.junit.runner.notification.RunListener
  * Listens in on the execution of an entire test suite (or test "type" in Grails) and creates
  * new TestRunListeners for each actual test class.
  */
+@groovy.transform.CompileStatic
 class SuiteRunListener extends RunListener {
 
     private final GrailsTestEventPublisher eventPublisher

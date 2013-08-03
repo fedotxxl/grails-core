@@ -47,7 +47,6 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
 
         mockController.render file:new ByteArrayInputStream("hello".bytes), contentType:"text/plain"
 
-
         assert "hello" == response.contentAsString
         assert null == response.getHeader(HttpHeaders.CONTENT_DISPOSITION)
 
@@ -61,7 +60,7 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
 
     void testRenderMethodWithStatus() {
         def mockController = new RenderController()
-        mockController.renderMessageWithStatus.call()
+        mockController.renderMessageWithStatus()
 
         def response = mockController.response
         assertEquals "test", response.contentAsString
@@ -73,13 +72,13 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
 
         def mockController = new RenderController()
         shouldFail(MissingMethodException) {
-            mockController.renderBug.call()
+            mockController.renderBug()
         }
     }
 
     void testRenderObject() {
         def mockController = new RenderController()
-        mockController.renderObject.call()
+        mockController.renderObject()
 
         def response = mockController.response
         assertEquals "bar", response.contentAsString
@@ -87,7 +86,7 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
 
     void testRenderList() {
         def mockController = new RenderController()
-        mockController.renderList.call()
+        mockController.renderList()
 
         def response = mockController.response
         assertEquals "[1, 2, 3]", response.contentAsString
@@ -95,7 +94,7 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
 
     void testRenderMap() {
         def mockController = new RenderController()
-        mockController.renderMap.call()
+        mockController.renderMap()
 
         def response = mockController.response
         assertEquals "['a':1, 'b':2]", response.contentAsString
@@ -104,7 +103,7 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
     void testRenderGString() {
         runTest {
             def mockController = new RenderController()
-            mockController.renderGString.call()
+            mockController.renderGString()
 
             def request = mockController.request
             assert request != null
@@ -119,7 +118,7 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
     void testRenderText() {
         runTest {
             def mockController = new RenderController()
-            mockController.renderText.call()
+            mockController.renderText()
 
             def request = mockController.request
             assert request != null
@@ -135,7 +134,7 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
         runTest {
             def mockController = new RenderController()
 
-            mockController.renderXML.call()
+            mockController.renderXML()
 
             def request = mockController.request
             assert request != null
@@ -151,7 +150,7 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
     void testRenderView() {
         def mockController = new RenderController()
 
-        mockController.renderView.call()
+        mockController.renderView()
 
         assert mockController.modelAndView
 
@@ -182,8 +181,8 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
 
         def response = mockController.response
 
-        assertEquals "hello world!", response.contentAsString
         assertEquals "text/html;charset=utf-8", response.contentType
+        assertEquals "hello world!", response.contentAsString
     }
 
     void testRenderTemplateWithCollectionUsingImplicitITVariable() {
@@ -194,7 +193,7 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
         resourceLoader.registerMockResource '/render/_peopleTemplate.gsp', '${it.firstName} ${it.middleName}<br/>'
         appCtx.groovyPageLocator.addResourceLoader resourceLoader
         webRequest.controllerName = 'render'
-        mockController.renderTemplateWithCollection.call()
+        mockController.renderTemplateWithCollection()
 
         def resopnse = mockController.response
         assertEquals 'Jacob Ray<br/>Zachary Scott<br/>', response.contentAsString
@@ -208,7 +207,7 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
         resourceLoader.registerMockResource '/render/_peopleTemplate.gsp', '${person.firstName} ${person.middleName}<br/>'
         appCtx.groovyPageLocator.addResourceLoader resourceLoader
         webRequest.controllerName = 'render'
-        mockController.renderTemplateWithCollectionAndExplicitVarName.call()
+        mockController.renderTemplateWithCollectionAndExplicitVarName()
 
         def resopnse = mockController.response
         assertEquals 'Jacob Ray<br/>Zachary Scott<br/>', response.contentAsString
@@ -222,7 +221,7 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
         resourceLoader.registerMockResource "/render/_xmlTemplate.gsp", '<hello>world</hello>'
         appCtx.groovyPageLocator.addResourceLoader resourceLoader
         webRequest.controllerName = "render"
-        mockController.renderXmlTemplate.call()
+        mockController.renderXmlTemplate()
 
         def response = mockController.response
 
@@ -232,8 +231,6 @@ class RenderMethodTests extends AbstractGrailsControllerTests {
 }
 
 class RenderController {
-
-
 
     def renderBug = {
         render(view:'login', [foo:"bar"])

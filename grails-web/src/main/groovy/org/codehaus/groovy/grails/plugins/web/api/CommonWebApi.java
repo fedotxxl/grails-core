@@ -15,13 +15,18 @@
  */
 package org.codehaus.groovy.grails.plugins.web.api;
 
+import org.codehaus.groovy.grails.commons.CodecArtefactHandler;
 import org.codehaus.groovy.grails.commons.GrailsApplication;
+import org.codehaus.groovy.grails.commons.GrailsClass;
+import org.codehaus.groovy.grails.commons.GrailsCodecClass;
 import org.codehaus.groovy.grails.plugins.GrailsPluginManager;
 import org.codehaus.groovy.grails.plugins.support.aware.GrailsApplicationAware;
+import org.codehaus.groovy.grails.support.encoding.Encoder;
 import org.codehaus.groovy.grails.web.servlet.FlashScope;
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes;
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsParameterMap;
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest;
+import org.codehaus.groovy.runtime.InvokerHelper;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -43,11 +48,13 @@ import java.io.Serializable;
  */
 public class CommonWebApi implements GrailsApplicationAware, ServletContextAware, ApplicationContextAware, Serializable{
     private static final long serialVersionUID = 1;
+    public static final String RAW_CODEC_NAME = "org.codehaus.groovy.grails.plugins.codecs.RawCodec";
 
     private transient GrailsPluginManager pluginManager;
     private transient GrailsApplication grailsApplication;
     private transient ServletContext servletContext;
     private transient ApplicationContext applicationContext;
+    private transient Encoder rawEncoder;
 
     public CommonWebApi(GrailsPluginManager pluginManager) {
         this.pluginManager = pluginManager;
@@ -57,11 +64,47 @@ public class CommonWebApi implements GrailsApplicationAware, ServletContextAware
     }
 
     /**
+     * Marks the given value to be output in raw form without encoding
+     *
+     * @param instance The instance
+     * @param value The value
+     * @return The raw unencoded value
+     * @since 2.3
+     */
+    public Object raw(Object instance, Object value) {
+        Encoder encoder = getRawEncoder(instance);
+        if(encoder != null) {
+            return encoder.encode(value);
+        }
+        else {
+            return InvokerHelper.invokeMethod(value, "encodeAsRaw", null);
+        }
+    }
+
+    private Encoder getRawEncoder(GrailsApplication application) {
+        if(application != null) {
+            GrailsClass grailsClass = application.getArtefact(CodecArtefactHandler.TYPE, RAW_CODEC_NAME);
+            GrailsCodecClass codecClass = (GrailsCodecClass) grailsClass;
+            if(codecClass != null) {
+                return codecClass.getEncoder();
+            }
+        }
+        return null;
+    }
+    private Encoder getRawEncoder(Object instance) {
+        if(rawEncoder == null) {
+            GrailsApplication application = getGrailsApplication(instance);
+            rawEncoder = getRawEncoder(application);
+        }
+        return rawEncoder;
+    }
+
+    /**
      * Obtains the Grails parameter map
      *
      * @return The GrailsParameterMap instance
      */
-    public GrailsParameterMap getParams(@SuppressWarnings("unused") Object instance) {
+    public GrailsParameterMap getParams(Object instance) {
         return currentRequestAttributes().getParams();
     }
 
@@ -70,7 +113,7 @@ public class CommonWebApi implements GrailsApplicationAware, ServletContextAware
      *
      * @return The FlashScope instance
      */
-    public FlashScope getFlash(@SuppressWarnings("unused") Object instance) {
+    public FlashScope getFlash(Object instance) {
         return currentRequestAttributes().getFlashScope();
     }
 
@@ -79,7 +122,7 @@ public class CommonWebApi implements GrailsApplicationAware, ServletContextAware
      *
      * @return The HttpSession instance
      */
-    public HttpSession getSession(@SuppressWarnings("unused") Object instance) {
+    public HttpSession getSession(Object instance) {
         return currentRequestAttributes().getSession();
     }
 
@@ -88,7 +131,7 @@ public class CommonWebApi implements GrailsApplicationAware, ServletContextAware
      *
      * @return The HttpServletRequest instance
      */
-    public HttpServletRequest getRequest(@SuppressWarnings("unused") Object instance) {
+    public HttpServletRequest getRequest(Object instance) {
         return currentRequestAttributes().getCurrentRequest();
     }
 
@@ -97,7 +140,7 @@ public class CommonWebApi implements GrailsApplicationAware, ServletContextAware
      *
      * @return The ServletContext instance
      */
-    public ServletContext getServletContext(@SuppressWarnings("unused") Object instance) {
+    public ServletContext getServletContext(Object instance) {
         if (servletContext == null) {
             servletContext = currentRequestAttributes().getServletContext();
         }
@@ -109,7 +152,7 @@ public class CommonWebApi implements GrailsApplicationAware, ServletContextAware
      *
      * @return The HttpServletResponse instance
      */
-    public HttpServletResponse getResponse(@SuppressWarnings("unused") Object instance) {
+    public HttpServletResponse getResponse(Object instance) {
         return currentRequestAttributes().getCurrentResponse();
     }
 
@@ -118,7 +161,7 @@ public class CommonWebApi implements GrailsApplicationAware, ServletContextAware
      *
      * @return The GrailsApplicationAttributes instance
      */
-    public GrailsApplicationAttributes getGrailsAttributes(@SuppressWarnings("unused") Object instance) {
+    public GrailsApplicationAttributes getGrailsAttributes(Object instance) {
         return currentRequestAttributes().getAttributes();
     }
 
@@ -148,7 +191,7 @@ public class CommonWebApi implements GrailsApplicationAware, ServletContextAware
      * Obtains the currently executing action name
      * @return The action name
      */
-    public String getActionName(@SuppressWarnings("unused") Object instance) {
+    public String getActionName(Object instance) {
         return currentRequestAttributes().getActionName();
     }
 
@@ -156,7 +199,7 @@ public class CommonWebApi implements GrailsApplicationAware, ServletContextAware
      * Obtains the currently executing controller name
      * @return The controller name
      */
-    public String getControllerName(@SuppressWarnings("unused") Object instance) {
+    public String getControllerName(Object instance) {
         return currentRequestAttributes().getControllerName();
     }
 
@@ -165,7 +208,7 @@ public class CommonWebApi implements GrailsApplicationAware, ServletContextAware
      *
      * @return The GrailsWebRequest instance
      */
-    public GrailsWebRequest getWebRequest(@SuppressWarnings("unused") Object instance) {
+    public GrailsWebRequest getWebRequest(Object instance) {
         return currentRequestAttributes();
     }
 
@@ -191,6 +234,7 @@ public class CommonWebApi implements GrailsApplicationAware, ServletContextAware
 
     public void setGrailsApplication(GrailsApplication grailsApplication) {
         this.grailsApplication = grailsApplication;
+        this.rawEncoder = getRawEncoder(grailsApplication);
     }
 
     public void setServletContext(ServletContext servletContext) {

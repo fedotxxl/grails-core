@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,46 +15,67 @@
  */
 package org.codehaus.groovy.grails.plugins.codecs;
 
-import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes;
-import org.codehaus.groovy.grails.web.util.StreamCharBuffer;
-import org.springframework.web.context.request.RequestAttributes;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.util.HtmlUtils;
+import org.codehaus.groovy.grails.commons.GrailsApplication;
+import org.codehaus.groovy.grails.plugins.support.aware.GrailsApplicationAware;
+import org.codehaus.groovy.grails.support.encoding.CodecFactory;
+import org.codehaus.groovy.grails.support.encoding.CodecIdentifier;
+import org.codehaus.groovy.grails.support.encoding.Decoder;
+import org.codehaus.groovy.grails.support.encoding.Encoder;
 
 /**
  * Encodes and decodes strings to and from HTML.
  *
  * @author Graeme Rocher
+ * @author Lari Hotari
  * @since 1.1
  */
-public class HTMLCodec {
-
-    public static CharSequence encode(Object target) {
-        if (target != null) {
-            if (target instanceof StreamCharBuffer) {
-                return ((StreamCharBuffer)target).encodeAsHTML();
-            }
-            return HtmlUtils.htmlEscape(target.toString());
+public final class HTMLCodec implements CodecFactory, GrailsApplicationAware {
+    public static final String CONFIG_PROPERTY_GSP_HTMLCODEC = "grails.views.gsp.htmlcodec";
+    static final String CODEC_NAME = "HTML";
+    private Encoder encoder;
+    private static final Encoder xml_encoder = new HTMLEncoder();
+    private static final Encoder html4_encoder = new HTML4Encoder() {
+        @Override
+        public CodecIdentifier getCodecIdentifier() {
+            return HTMLEncoder.HTML_CODEC_IDENTIFIER;
         }
-        return null;
+    };
+    private static final Decoder decoder = new HTML4Decoder() {
+        @Override
+        public CodecIdentifier getCodecIdentifier() {
+            return HTMLEncoder.HTML_CODEC_IDENTIFIER;
+        }
+    };
+
+    public HTMLCodec() {
+        setUseLegacyEncoder(true);
     }
 
-    public static boolean shouldEncode() {
-        final RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
-        if (attributes != null) {
-            Object codecName = attributes.getAttribute(GrailsApplicationAttributes.GSP_CODEC,
-                    RequestAttributes.SCOPE_REQUEST);
-            if (codecName != null && codecName.toString().equalsIgnoreCase("html")) {
-                return false;
-            }
-        }
-        return true;
+    public Encoder getEncoder() {
+        return encoder;
     }
 
-    public static String decode(Object target) {
-        if (target != null) {
-            return HtmlUtils.htmlUnescape(target.toString());
+    public Decoder getDecoder() {
+        return decoder;
+    }
+
+    public void setGrailsApplication(GrailsApplication grailsApplication) {
+        if (grailsApplication == null || grailsApplication.getFlatConfig() == null) {
+            return;
         }
-        return null;
+
+        Object htmlCodecSetting = grailsApplication.getFlatConfig().get(CONFIG_PROPERTY_GSP_HTMLCODEC);
+        if (htmlCodecSetting == null) {
+            return;
+        }
+
+        String htmlCodecSettingStr = htmlCodecSetting.toString().toLowerCase();
+        if (htmlCodecSettingStr.startsWith("xml") || "xhtml".equalsIgnoreCase(htmlCodecSettingStr)) {
+            setUseLegacyEncoder(false);
+        }
+    }
+
+    public void setUseLegacyEncoder(boolean useLegacyEncoder) {
+        encoder = useLegacyEncoder ? html4_encoder : xml_encoder;
     }
 }

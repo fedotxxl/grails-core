@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.cli.api;
 
 import grails.build.logging.GrailsConsole;
@@ -21,18 +20,13 @@ import grails.util.BuildSettings;
 import grails.util.GrailsNameUtils;
 import grails.util.Metadata;
 import grails.util.PluginBuildSettings;
+import groovy.lang.Binding;
 import groovy.lang.Closure;
 import groovy.lang.GroovySystem;
 import groovy.lang.MetaClass;
 import groovy.util.ConfigSlurper;
 import groovy.util.XmlSlurper;
 import groovy.util.slurpersupport.GPathResult;
-import org.codehaus.gant.GantBinding;
-import org.codehaus.groovy.grails.cli.ScriptExitException;
-import org.codehaus.groovy.grails.cli.support.GrailsBuildEventListener;
-import org.codehaus.groovy.grails.io.support.*;
-import org.codehaus.groovy.grails.plugins.GrailsPluginUtils;
-import org.codehaus.groovy.runtime.MethodClosure;
 
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
@@ -48,6 +42,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
+import org.codehaus.groovy.grails.cli.ScriptExitException;
+import org.codehaus.groovy.grails.cli.support.GrailsBuildEventListener;
+import org.codehaus.groovy.grails.io.support.ClassPathResource;
+import org.codehaus.groovy.grails.io.support.FileSystemResource;
+import org.codehaus.groovy.grails.io.support.IOUtils;
+import org.codehaus.groovy.grails.io.support.PathMatchingResourcePatternResolver;
+import org.codehaus.groovy.grails.io.support.Resource;
+import org.codehaus.groovy.grails.plugins.GrailsPluginUtils;
+import org.codehaus.groovy.runtime.MethodClosure;
 
 /**
  * Utility methods used on the command line.
@@ -84,6 +88,7 @@ public class BaseSettingsApi {
         metadataFile = new File(buildSettings.getBaseDir(), "application.properties");
 
         metadata = metadataFile.exists() ? Metadata.getInstance(metadataFile) : Metadata.getCurrent();
+        metadata.setServletVersion(buildSettings.getServletVersion());
 
         metadataFile = metadata.getMetadataFile();
         enableProfile = Boolean.valueOf(getPropertyValue("grails.script.profile", false).toString());
@@ -108,12 +113,17 @@ public class BaseSettingsApi {
         this.buildEventListener = buildEventListener;
     }
 
+    public GrailsBuildEventListener getBuildEventListener() {
+        return buildEventListener;
+    }
+
     public void enableUaa() {
         try {
-            Class<?> uaaClass = BaseSettingsApi.class.getClassLoader().loadClass("org.codehaus.groovy.grails.cli.support.UaaIntegration");
+            Class<?> uaaClass = BaseSettingsApi.class.getClassLoader().loadClass("org.codehaus.groovy.grails.cli.support.UaaEnabler");
+            Object instance = uaaClass.getConstructor(new Class[]{BuildSettings.class, PluginBuildSettings.class}).newInstance(buildSettings, pluginSettings);
             MetaClass metaClass = GroovySystem.getMetaClassRegistry().getMetaClass(uaaClass);
-            metaClass.invokeMethod(uaaClass, "enable", new Object[]{buildSettings, pluginSettings, isInteractive});
-        } catch (ClassNotFoundException e) {
+            metaClass.invokeMethod(instance, "enable", new Object[]{isInteractive});
+        } catch (Exception e) {
             // UAA not present, ignore
         }
     }
@@ -259,7 +269,7 @@ public class BaseSettingsApi {
         return value != null ? value : defaultValue;
     }
 
-    public void updateMetadata(@SuppressWarnings("hiding") Metadata metadata, @SuppressWarnings("rawtypes") Map entries) {
+    public void updateMetadata(Metadata metadata, @SuppressWarnings("rawtypes") Map entries) {
         for (Object key : entries.keySet()) {
             final Object value = entries.get(key);
             if (value != null) {
@@ -275,8 +285,7 @@ public class BaseSettingsApi {
      * file. If it doesn't exist, the file is created.
      */
     public void updateMetadata(@SuppressWarnings("rawtypes") Map entries) {
-        @SuppressWarnings("hiding") Metadata metadata = Metadata.getCurrent();
-        updateMetadata(metadata, entries);
+        updateMetadata(Metadata.getCurrent(), entries);
     }
 
     /**
@@ -344,10 +353,10 @@ public class BaseSettingsApi {
     /**
      * Exits the build immediately with a given exit code.
      */
-   public void exit(int code) {
-       if (buildEventListener != null) {
-           buildEventListener.triggerEvent("Exiting", code);
-       }
+    public void exit(int code) {
+        if (buildEventListener != null) {
+            buildEventListener.triggerEvent("Exiting", code);
+        }
 
         // Prevent system.exit during unit/integration testing
         if (System.getProperty("grails.cli.testing") != null || System.getProperty("grails.disable.exit") != null) {
@@ -387,9 +396,7 @@ public class BaseSettingsApi {
         exit(1);
     }
 
-
-
-    public void makeApiAvailableToScripts(final GantBinding binding, final Object cla) {
+    public void makeApiAvailableToScripts(final Binding binding, final Object cla) {
         final Method[] declaredMethods = cla.getClass().getDeclaredMethods();
         for (Method method : declaredMethods) {
             final String name = method.getName();

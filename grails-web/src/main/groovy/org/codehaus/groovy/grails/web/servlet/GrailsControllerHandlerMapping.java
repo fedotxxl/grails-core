@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,19 +61,19 @@ public class GrailsControllerHandlerMapping extends AbstractHandlerMapping imple
         GrailsControllerClass controllerClass;
         Object controllerAttribute = null;
         GrailsWebRequest webRequest = (GrailsWebRequest)request.getAttribute(GrailsApplicationAttributes.WEB_REQUEST);
-        if(webRequest != null) {
+        if (webRequest != null) {
             controllerAttribute = webRequest.getAttribute(GrailsApplicationAttributes.GRAILS_CONTROLLER_CLASS, WebRequest.SCOPE_REQUEST);
             Boolean canUse = (Boolean)webRequest.getAttribute(GrailsApplicationAttributes.GRAILS_CONTROLLER_CLASS_AVAILABLE, WebRequest.SCOPE_REQUEST);
             if(canUse == null || !canUse) {
                 controllerAttribute = null;
             }
-        } 
-        
-        if(controllerAttribute instanceof GrailsControllerClass) {
-        	controllerClass = (GrailsControllerClass) controllerAttribute;
+        }
+
+        if (controllerAttribute instanceof GrailsControllerClass) {
+            controllerClass = (GrailsControllerClass) controllerAttribute;
         } else {
-        	controllerClass = (GrailsControllerClass) grailsApplication.getArtefactForFeature(
-        			ControllerArtefactHandler.TYPE, uri);
+            controllerClass = (GrailsControllerClass) grailsApplication.getArtefactForFeature(
+                    ControllerArtefactHandler.TYPE, uri);
         }
 
         return getHandlerForControllerClass(controllerClass, request);
@@ -85,8 +86,7 @@ public class GrailsControllerHandlerMapping extends AbstractHandlerMapping imple
      * @param request The HttpServletRequest
      * @return The handler
      */
-    protected Object getHandlerForControllerClass(GrailsControllerClass controllerClass,
-            @SuppressWarnings("unused") HttpServletRequest request) {
+    protected Object getHandlerForControllerClass(GrailsControllerClass controllerClass, HttpServletRequest request) {
         if (controllerClass != null) {
             try {
                 return getWebApplicationContext().getBean(MAIN_CONTROLLER_BEAN, Controller.class);

@@ -31,9 +31,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.ivy.core.report.ResolveReport;
-import org.codehaus.groovy.grails.resolve.IvyDependencyManager;
-import org.codehaus.groovy.grails.resolve.ResolveException;
+import org.codehaus.groovy.grails.resolve.DependencyReport;
 
 /**
  * Support class that configures the Grails classpath when executing command line scripts.
@@ -69,7 +67,6 @@ public class ClasspathConfigurer {
                 existingJars.add(url.getFile());
             }
 
-
             URL[] urls = getClassLoaderUrls(settings, new File(settings.getProjectWorkDir(), "scriptCache"), existingJars, skipPlugins);
             addUrlsToRootLoader(settings.getRootLoader(), urls);
 
@@ -87,9 +84,8 @@ public class ClasspathConfigurer {
      * Creates a new root loader with the Grails libraries and the
      * application's plugin libraries on the classpath.
      */
-    protected URL[] getClassLoaderUrls(@SuppressWarnings("hiding") BuildSettings settings,
-                                       File cacheDir, Set<String> excludes,
-                                       @SuppressWarnings("hiding") boolean skipPlugins) throws MalformedURLException {
+    protected URL[] getClassLoaderUrls(BuildSettings settings, File cacheDir, Set<String> excludes,
+                                       boolean skipPlugins) throws MalformedURLException {
         List<URL> urls = new ArrayList<URL>();
 
         // If 'grailsHome' is set, make sure the script cache directory takes precedence
@@ -110,7 +106,7 @@ public class ClasspathConfigurer {
         final List<File> buildDependencies;
         buildDependencies = settings.getBuildDependencies();
         if (!dependenciesExternallyConfigured && buildDependencies.isEmpty()) {
-            GrailsConsole.getInstance().error("Required Grails build dependencies were not found. Either GRAILS_HOME is not set or your dependencies are misconfigured in grails-app/conf/BuildConfig.groovy");
+            GrailsConsole.getInstance().error("Required Grails build dependencies were not found. This is normally due to internet connectivity issues (such as a misconfigured proxy) or missing repositories in grails-app/conf/BuildConfig.groovy. Please verify your configuration to continue.");
             cleanResolveCache(settings);
 
             System.exit(1);
@@ -122,12 +118,10 @@ public class ClasspathConfigurer {
         // will be required for the build to work.
         addDependenciesToURLs(excludes, urls, settings.getTestDependencies());
 
-
         // Important, we call these so they're properly initialized!
         settings.getRuntimeDependencies();
 
         settings.getCompileDependencies();
-
 
         // Add the libraries of both project and global plugins.
         if (!skipPlugins) {
@@ -136,23 +130,23 @@ public class ClasspathConfigurer {
             }
         }
 
-        ResolveReport buildResolveReport = settings.getBuildResolveReport();
+        DependencyReport buildResolveReport = settings.getBuildResolveReport();
         if (buildResolveReport != null && buildResolveReport.hasError()) {
             handleResolveError(settings, buildResolveReport);
         }
-        ResolveReport compileResolveReport = settings.getCompileResolveReport();
+        DependencyReport compileResolveReport = settings.getCompileResolveReport();
         if (compileResolveReport != null && compileResolveReport.hasError()) {
             handleResolveError(settings, compileResolveReport);
         }
-        ResolveReport runtimeResolveReport = settings.getRuntimeResolveReport();
+        DependencyReport runtimeResolveReport = settings.getRuntimeResolveReport();
         if (runtimeResolveReport != null && runtimeResolveReport.hasError()) {
             handleResolveError(settings, runtimeResolveReport);
         }
-        ResolveReport testResolveReport = settings.getTestResolveReport();
+        DependencyReport testResolveReport = settings.getTestResolveReport();
         if (testResolveReport != null && testResolveReport.hasError()) {
             handleResolveError(settings, testResolveReport);
         }
-        ResolveReport providedResolveReport = settings.getProvidedResolveReport();
+        DependencyReport providedResolveReport = settings.getProvidedResolveReport();
         if (providedResolveReport != null && providedResolveReport.hasError()) {
             handleResolveError(settings, providedResolveReport);
         }
@@ -160,9 +154,11 @@ public class ClasspathConfigurer {
         return urls.toArray(new URL[urls.size()]);
     }
 
-    private void handleResolveError(@SuppressWarnings("hiding") BuildSettings settings, ResolveReport buildResolveReport) {
+    private void handleResolveError(BuildSettings settings, DependencyReport buildResolveReport) {
         cleanResolveCache(settings);
-        GrailsConsole.getInstance().error(new ResolveException(buildResolveReport).getMessage());
+        GrailsConsole grailsConsole = GrailsConsole.getInstance();
+        grailsConsole.error(buildResolveReport.getResolveError().getMessage());
+        grailsConsole.addStatus("Run 'grails dependency-report' for further information.");
         if (exitOnResolveError) {
             System.exit(1);
         }
@@ -196,13 +192,13 @@ public class ClasspathConfigurer {
             }
 
 
-            if(file.getName().contains("xercesImpl")) {
+            if (file.getName().contains("xercesImpl")) {
                 // workaround for GRAILS-9708
                 System.setProperty("javax.xml.parsers.DocumentBuilderFactory","com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl");
             }
             if (excludes != null && !excludes.contains(file.getName())) {
                 URL url = file.toURI().toURL();
-                if(urls.contains(url)) continue;
+                if (urls.contains(url)) continue;
 
                 urls.add(url);
                 excludes.add(file.getName());
@@ -217,17 +213,13 @@ public class ClasspathConfigurer {
      * @param urls      The list of URLs to add the plugin JARs to.
      * @param settings
      */
-    protected void addPluginLibs(File pluginDir, List<URL> urls,
-                                 @SuppressWarnings("hiding") BuildSettings settings) throws MalformedURLException {
+    protected void addPluginLibs(File pluginDir, List<URL> urls, BuildSettings settings) throws MalformedURLException {
         if (!pluginDir.exists()) return;
 
         // otherwise just add them
         File libDir = new File(pluginDir, "lib");
         if (libDir.exists()) {
-            final IvyDependencyManager dependencyManager = settings.getDependencyManager();
-            String pluginName = pluginPathSupport.getPluginName(pluginDir);
-            Collection<?> excludes = dependencyManager.getPluginExcludes(pluginName);
-            addLibs(libDir, urls, excludes != null ? excludes : Collections.emptyList());
+            addLibs(libDir, urls, Collections.emptyList());
         }
     }
 

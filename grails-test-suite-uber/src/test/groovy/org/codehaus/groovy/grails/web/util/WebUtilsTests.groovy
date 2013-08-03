@@ -2,15 +2,15 @@ package org.codehaus.groovy.grails.web.util
 
 import org.codehaus.groovy.grails.commons.DefaultGrailsApplication
 import org.codehaus.groovy.grails.commons.GrailsApplication
+import org.codehaus.groovy.grails.plugins.web.mimes.MimeTypesFactoryBean
 import org.codehaus.groovy.grails.support.MockApplicationContext
+import org.codehaus.groovy.grails.web.mime.MimeType
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.mock.web.MockServletContext
 import org.springframework.web.context.request.RequestContextHolder
-import org.codehaus.groovy.grails.web.mime.MimeType
-import org.codehaus.groovy.grails.plugins.web.mimes.MimeTypesFactoryBean
 
 /**
  * @author Graeme Rocher
@@ -20,6 +20,7 @@ class WebUtilsTests extends GroovyTestCase {
 
     def config
     protected void setUp() {
+        RequestContextHolder.setRequestAttributes null
         config = new ConfigSlurper().parse("""
 grails.mime.file.extensions=false
 grails.mime.types = [ html: ['text/html','application/xhtml+xml'],
@@ -35,8 +36,6 @@ grails.mime.types = [ html: ['text/html','application/xhtml+xml'],
                       form: 'application/x-www-form-urlencoded',
                       multipartForm: 'multipart/form-data'
                     ]        """)
-
-
     }
 
     protected void tearDown() {
@@ -62,7 +61,6 @@ grails.mime.file.extensions=true
         def ctx = new MockApplicationContext()
         ctx.registerMockBean(GrailsApplication.APPLICATION_ID, ga)
         def factory = new MimeTypesFactoryBean(grailsApplication: ga)
-        factory.afterPropertiesSet()
 
         ctx.registerMockBean(MimeType.BEAN_NAME, factory.getObject())
 
@@ -87,7 +85,7 @@ grails.mime.file.extensions=true
     }
 
     void testGetRequestURIForGrailsDispatchURI() {
-        def request = new MockHttpServletRequest();
+        def request = new MockHttpServletRequest()
         request.contextPath = "/root"
         request.requestURI = "/root/example/index.dispatch"
 

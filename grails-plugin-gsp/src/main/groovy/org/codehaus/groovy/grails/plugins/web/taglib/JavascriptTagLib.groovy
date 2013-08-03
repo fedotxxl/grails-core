@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +15,14 @@
  */
 package org.codehaus.groovy.grails.plugins.web.taglib
 
-import javax.annotation.PostConstruct;
-
 import grails.artefact.Artefact
+
+import javax.annotation.PostConstruct
+
 import org.codehaus.groovy.grails.plugins.GrailsPluginManager
-import org.codehaus.groovy.grails.web.pages.FastStringWriter
 import org.codehaus.groovy.grails.web.taglib.exceptions.GrailsTagException
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationContextAware;
+import org.springframework.context.ApplicationContext
+import org.springframework.context.ApplicationContextAware
 import org.springframework.util.ClassUtils
 
 /**
@@ -35,9 +36,9 @@ class JavascriptTagLib implements ApplicationContextAware {
     /**
      * Mappings to the relevant files to be included for each library.
      */
-    static final INCLUDED_LIBRARIES = "org.codehaus.grails.INCLUDED_JS_LIBRARIES"
-    static final INCLUDED_JS = "org.codehaus.grails.INCLUDED_JS"
-    static final CONTROLLER = "org.codehaus.groovy.grails.CONTROLLER"
+    public static final String INCLUDED_LIBRARIES = "org.codehaus.grails.INCLUDED_JS_LIBRARIES"
+    static final String INCLUDED_JS = "org.codehaus.grails.INCLUDED_JS"
+    static final String CONTROLLER = "org.codehaus.groovy.grails.CONTROLLER"
     static final LIBRARY_MAPPINGS = [:]
     static final PROVIDER_MAPPINGS = [:]
 
@@ -45,6 +46,8 @@ class JavascriptTagLib implements ApplicationContextAware {
 
     Class<JavascriptProvider> defaultProvider
     boolean hasResourceProcessor = false
+
+    static encodeAsForTags = [escapeJavascript: 'JavaScript']
 
     JavascriptTagLib() {
         def cl = Thread.currentThread().contextClassLoader
@@ -124,7 +127,10 @@ class JavascriptTagLib implements ApplicationContextAware {
                 out << r.script(Collections.EMPTY_MAP, body)
             } else {
                 out.println '<script type="text/javascript">'
-                out.println body()
+                withCodec(expressionCodec:"JavaScript") {
+                    out << body()
+                }
+                out.println()
                 out.println '</script>'
             }
         }
@@ -409,26 +415,12 @@ a 'params' key to the [url] attribute instead.""")
      * &lt;g:escapeJavascript&gt;This is some "text" to be escaped&lt;/g:escapeJavascript&gt;
      */
     Closure escapeJavascript = { attrs, body ->
-        def js = ''
-        if (body instanceof Closure) {
-            def tmp = out
-            def sw = new FastStringWriter()
-            out = sw
-            // invoke body
+        if (body) {
             out << body()
-            // restore out
-            out = tmp
-            js = sw.toString()
         }
-        else if (body instanceof CharSequence) {
-            js = body.toString()
+        else if (attrs.value) {
+            out << attrs.value
         }
-        else if (attrs instanceof CharSequence) {
-            js = attrs.toString()
-        }
-        out << js.replaceAll(/\r\n|\n|\r/, '\\\\n')
-                 .replaceAll('"','\\\\"')
-                 .replaceAll("'","\\\\'")
     }
 
     Closure setProvider = { attrs, body ->

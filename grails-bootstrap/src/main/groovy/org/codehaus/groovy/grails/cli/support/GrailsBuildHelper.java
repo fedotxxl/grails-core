@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +29,8 @@ import java.util.List;
  * @author Peter Ledbrook
  */
 public class GrailsBuildHelper {
+
+    private static final Object[] NO_ARGS = {};
 
     private ClassLoader classLoader;
     private Object settings;
@@ -132,7 +135,7 @@ public class GrailsBuildHelper {
     }
 
     public File getGrailsWorkDir() {
-        return (File) invokeMethod(settings, "getGrailsWorkDir", new Object[0]);
+        return (File) invokeMethod(settings, "getGrailsWorkDir", NO_ARGS);
     }
 
     public void setGrailsWorkDir(File dir) {
@@ -140,7 +143,7 @@ public class GrailsBuildHelper {
     }
 
     public File getProjectWorkDir() {
-        return (File) invokeMethod(settings, "getProjectWorkDir", new Object[0]);
+        return (File) invokeMethod(settings, "getProjectWorkDir", NO_ARGS);
     }
 
     public void setProjectWorkDir(File dir) {
@@ -148,7 +151,7 @@ public class GrailsBuildHelper {
     }
 
     public File getClassesDir() {
-        return (File) invokeMethod(settings, "getClassesDir", new Object[0]);
+        return (File) invokeMethod(settings, "getClassesDir", NO_ARGS);
     }
 
     public void setClassesDir(File dir) {
@@ -156,7 +159,7 @@ public class GrailsBuildHelper {
     }
 
     public File getTestClassesDir() {
-        return (File) invokeMethod(settings, "getTestClassesDir", new Object[0]);
+        return (File) invokeMethod(settings, "getTestClassesDir", NO_ARGS);
     }
 
     public void setTestClassesDir(File dir) {
@@ -164,7 +167,7 @@ public class GrailsBuildHelper {
     }
 
     public File getResourcesDir() {
-        return (File) invokeMethod(settings, "getResourcesDir", new Object[0]);
+        return (File) invokeMethod(settings, "getResourcesDir", NO_ARGS);
     }
 
     public void setResourcesDir(File dir) {
@@ -172,7 +175,7 @@ public class GrailsBuildHelper {
     }
 
     public File getProjectPluginsDir() {
-        return (File) invokeMethod(settings, "getProjectPluginsDir", new Object[0]);
+        return (File) invokeMethod(settings, "getProjectPluginsDir", NO_ARGS);
     }
 
     public void setProjectPluginsDir(File dir) {
@@ -180,7 +183,7 @@ public class GrailsBuildHelper {
     }
 
     public File getGlobalPluginsDir() {
-        return (File) invokeMethod(settings, "getGlobalPluginsDir", new Object[0]);
+        return (File) invokeMethod(settings, "getGlobalPluginsDir", NO_ARGS);
     }
 
     public void setGlobalPluginsDir(File dir) {
@@ -188,7 +191,7 @@ public class GrailsBuildHelper {
     }
 
     public File getTestReportsDir() {
-        return (File) invokeMethod(settings, "getTestReportsDir", new Object[0]);
+        return (File) invokeMethod(settings, "getTestReportsDir", NO_ARGS);
     }
 
     public void setTestReportsDir(File dir) {
@@ -197,7 +200,7 @@ public class GrailsBuildHelper {
 
     @SuppressWarnings("rawtypes")
     public List getCompileDependencies() {
-        return (List) invokeMethod(settings, "getCompileDependencies", new Object[0]);
+        return (List) invokeMethod(settings, "getCompileDependencies", NO_ARGS);
     }
 
     @SuppressWarnings("rawtypes")
@@ -216,7 +219,7 @@ public class GrailsBuildHelper {
 
     @SuppressWarnings("rawtypes")
     public List getTestDependencies() {
-        return (List) invokeMethod(settings, "getTestDependencies", new Object[0]);
+        return (List) invokeMethod(settings, "getTestDependencies", NO_ARGS);
     }
 
     @SuppressWarnings("rawtypes")
@@ -226,7 +229,7 @@ public class GrailsBuildHelper {
 
     @SuppressWarnings("rawtypes")
     public List getRuntimeDependencies() {
-        return (List) invokeMethod(settings, "getRuntimeDependencies", new Object[0]);
+        return (List) invokeMethod(settings, "getRuntimeDependencies", NO_ARGS);
     }
 
     @SuppressWarnings("rawtypes")

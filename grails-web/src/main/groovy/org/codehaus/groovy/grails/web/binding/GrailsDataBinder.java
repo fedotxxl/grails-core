@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,6 +90,7 @@ import org.springframework.beans.propertyeditors.CustomNumberEditor;
 import org.springframework.beans.propertyeditors.LocaleEditor;
 import org.springframework.context.ApplicationContext;
 import org.springframework.validation.BeanPropertyBindingResult;
+import org.springframework.validation.Validator;
 import org.springframework.web.bind.ServletRequestDataBinder;
 import org.springframework.web.bind.ServletRequestParameterPropertyValues;
 import org.springframework.web.context.WebApplicationContext;
@@ -137,6 +139,7 @@ public class GrailsDataBinder extends ServletRequestDataBinder {
     private static final String IDENTIFIER_SUFFIX = ".id";
     private List<String> transients = Collections.emptyList();
     public static final String DEFAULT_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.S";
+    private static final Object[] NO_HINTS = {};
 
     private GrailsDomainClass domainClass;
     private GrailsApplication grailsApplication;
@@ -203,7 +206,7 @@ public class GrailsDataBinder extends ServletRequestDataBinder {
      * @return A GrailsDataBinder instance
      */
     public static GrailsDataBinder createBinder(Object target, String objectName, HttpServletRequest request) {
-        GrailsDataBinder binder = createBinder(target,objectName);
+        GrailsDataBinder binder = createBinder(target, objectName);
         final GrailsWebRequest webRequest = GrailsWebRequest.lookup(request);
         initializeFromWebRequest(binder, webRequest);
 
@@ -217,8 +220,14 @@ public class GrailsDataBinder extends ServletRequestDataBinder {
             return;
         }
 
-        final GrailsApplication grailsApplication = webRequest.getAttributes().getGrailsApplication();
-        binder.setGrailsApplication(grailsApplication);
+        binder.setGrailsApplication(webRequest.getAttributes().getGrailsApplication());
+
+        if (webRequest.getApplicationContext() != null && webRequest.getApplicationContext().containsBean("dataBindingValidator")) {
+            Validator validator = webRequest.getApplicationContext().getBean("dataBindingValidator", Validator.class);
+            if (binder.getTarget() != null && validator.supports(binder.getTarget().getClass())) {
+                binder.setValidator(validator);
+            }
+        }
     }
 
     private void setGrailsApplication(GrailsApplication grailsApplication) {
@@ -271,7 +280,6 @@ public class GrailsDataBinder extends ServletRequestDataBinder {
         registry.registerCustomEditor(Date.class, new CompositeEditor(new StructuredDateEditor(dateFormat,true), new CustomDateEditor(new SimpleDateFormat(JSON_DATE_FORMAT), true)));
         registry.registerCustomEditor(Calendar.class, new StructuredDateEditor(dateFormat,true));
 
-
         ServletContext servletContext = grailsWebRequest != null ? grailsWebRequest.getServletContext() : null;
         registerCustomEditors(servletContext, registry);
     }
@@ -284,7 +292,7 @@ public class GrailsDataBinder extends ServletRequestDataBinder {
      * @return A GrailsDataBinder instance
      */
     public static GrailsDataBinder createBinder(Object target, String objectName) {
-        GrailsDataBinder binder = new GrailsDataBinder(target,objectName);
+        GrailsDataBinder binder = new GrailsDataBinder(target, objectName);
         binder.registerCustomEditor(byte[].class, new ByteArrayMultipartFileEditor());
         binder.registerCustomEditor(String.class, new StringMultipartFileEditor());
         binder.registerCustomEditor(Currency.class, new CurrencyEditor());
@@ -332,7 +340,7 @@ public class GrailsDataBinder extends ServletRequestDataBinder {
      * @param params The GrailsParameterMap object
      */
     public void bind(GrailsParameterMap params) {
-        bind(params,null);
+        bind(params, null);
     }
 
     public void bind(GrailsParameterMap params, String prefix) {
@@ -409,6 +417,7 @@ public class GrailsDataBinder extends ServletRequestDataBinder {
         filterNestedParameterMaps(mpvs);
         filterBlankValuesWhenTargetIsNullable(mpvs);
         super.doBind(mpvs);
+        validate(NO_HINTS);
     }
 
     private void filterBlankValuesWhenTargetIsNullable(MutablePropertyValues mpvs) {

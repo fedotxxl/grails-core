@@ -1,4 +1,5 @@
-/* Copyright 2008 the original author or authors.
+/*
+ * Copyright 2008 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +18,15 @@ package org.codehaus.groovy.grails.plugins.testing
 import grails.artefact.ApiDelegate
 import grails.converters.JSON
 import groovy.util.slurpersupport.GPathResult
+
 import javax.servlet.http.HttpServletRequest
+import javax.servlet.http.HttpServletResponse
+
 import org.codehaus.groovy.grails.plugins.web.api.ResponseMimeTypesApi
 import org.codehaus.groovy.grails.web.json.JSONElement
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
 import org.springframework.mock.web.MockHttpServletResponse
-import javax.servlet.http.HttpServletResponse
 import org.springframework.util.ReflectionUtils
 
 /**
@@ -41,7 +44,11 @@ abstract class AbstractGrailsMockHttpServletResponse extends MockHttpServletResp
      */
     void setFormat(String format) {
         HttpServletRequest request = GrailsWebRequest.lookup().getCurrentRequest()
+
+
         request.setAttribute(GrailsApplicationAttributes.RESPONSE_FORMAT, format)
+        // remove so that is can be repopulated
+        request.setAttribute(GrailsApplicationAttributes.RESPONSE_MIME_TYPE, null)
     }
 
     /**
@@ -50,7 +57,6 @@ abstract class AbstractGrailsMockHttpServletResponse extends MockHttpServletResp
     void leftShift(String content) {
         writer << content
     }
-
 
     /**
      * Return the primary value for the given header as a String, if any.
@@ -130,6 +136,4 @@ abstract class AbstractGrailsMockHttpServletResponse extends MockHttpServletResp
 
         return super.getRedirectedUrl()
     }
-
-
 }

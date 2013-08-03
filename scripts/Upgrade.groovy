@@ -25,7 +25,9 @@
 
 import grails.util.Metadata
 
-includeTargets << grailsScript("_GrailsPlugins")
+includeTargets << grailsScript("_GrailsClean")
+includeTargets << grailsScript("_GrailsPackage")
+includeTargets << grailsScript("_PluginDependencies")
 
 UNMODIFIED_CHECKSUMS = [indexgsp:['e9f4d3450ba02fe92d55f4ae4b53dee8', 'e9f4d3450ba02fe92d55f4ae4b53dee8', '77f5ed5c2fca586a9ff1dc8e7beeb85b', '5313f072b2ed10129a446d5f648d8b41'],
                         errorgsp:['473b673fb3f04a60412ace1b7bc12a8c', '473b673fb3f04a60412ace1b7bc12a8c', '473b673fb3f04a60412ace1b7bc12a8c', '473b673fb3f04a60412ace1b7bc12a8c'],
@@ -162,11 +164,32 @@ move it to the new location of '${basedir}/test/integration'. Please move the di
         if (configFile.exists()) {
             def configText = configFile.text
             configFile.withWriterAppend {
-                if (!configText.contains("grails.views.default.codec")) {
-                    it.writeLine 'grails.views.default.codec="none" // none, html, base64'
-                }
-                if (!configText.contains("grails.views.gsp.encoding")) {
-                    it.writeLine 'grails.views.gsp.encoding="UTF-8"'
+                if (!configText.find(/grails\s*\{\s*views\s*\{\s*gsp\s*\{/)) {
+                    it << """
+// Uncomment and edit the following lines to start using Grails encoding & escaping improvements
+
+/* remove this line 
+// GSP settings
+grails {
+    views {
+        gsp {
+            encoding = 'UTF-8'
+            htmlcodec = 'xml' // use xml escaping instead of HTML4 escaping
+            codecs {
+                expression = 'html' // escapes values inside ${}
+                scriptlet = 'none' // escapes output from scriptlets in GSPs
+                taglib = 'none' // escapes output from taglibs
+                staticparts = 'none' // escapes output from static template parts
+            }
+        }
+        // escapes all not-encoded output at final stage of outputting
+        filteringCodecForContentType {
+            //'text/html' = 'html'
+        }
+    }
+}
+remove this line */
+"""
                 }
             }
         }
@@ -191,40 +214,21 @@ move it to the new location of '${basedir}/test/integration'. Please move the di
         touch(file: "${basedir}/grails-app/i18n/messages.properties")
     }
 
-    // Add the app name and Grails version to the metadata.
-    def newMetadata = ["app.name": "$grailsAppName", "app.grails.version": "$grailsVersion"]
-    for (pluginEntry in grailsSettings.defaultPluginMap) {
-        def pluginName = pluginEntry.key
-        def pluginKey = "plugins.$pluginName".toString()
-        if (metadata.containsKey(pluginKey)) {
-            newMetadata[pluginKey] = pluginEntry.value
+    Metadata.current.setGrailsVersion grailsVersion
+    Metadata.current.persist()
+
+    // proceed with plugin-specific upgrade logic contained in 'scripts/_Upgrade.groovy' under every plugin's root
+    def pluginDirs = pluginSettings.getPluginDirectories()
+    for (pluginDir in pluginDirs) {
+        def upgradeScript = new File(pluginDir.getFile(), "scripts/_Upgrade.groovy")
+        if (upgradeScript.exists()) {
+            event("StatusUpdate", ["Executing ${pluginDir.getFilename()} plugin upgrade script"])
+            // instrumenting plugin scripts adding 'pluginBasedir' variable
+            def instrumentedUpgradeScript = "def pluginDir = '${pluginDir}'\n" + upgradeScript.text
+            // we are using text form of script here to prevent Gant caching
+            includeTargets << instrumentedUpgradeScript
         }
     }
-    updateMetadata(metadata, newMetadata)
-
-    // proceed plugin-specific upgrade logic contained in 'scripts/_Upgrade.groovy' under plugin's root
-    def plugins = pluginSettings.pluginBaseDirectories
-    if (plugins) {
-        for (pluginDir in plugins) {
-            def f = new File(pluginDir)
-            if (f.isDirectory() && f.name != 'core') {
-                // fix for Windows-style path with backslashes
-
-                def pluginBase = "${basedir}/plugins/${f.name}".toString().replaceAll("\\\\", "/")
-                // proceed _Upgrade.groovy plugin script if exists
-                def upgradeScript = new File("${pluginBase}/scripts/_Upgrade.groovy")
-                if (upgradeScript.exists()) {
-                    event("StatusUpdate", ["Executing ${f.name} plugin upgrade script"])
-                    // instrumenting plugin scripts adding 'pluginBasedir' variable
-                    def instrumentedUpgradeScript = "def pluginBasedir = '${pluginBase}'\n" + upgradeScript.text
-                    // we are using text form of script here to prevent Gant caching
-                    includeTargets << instrumentedUpgradeScript
-                }
-            }
-        }
-    }
-
-    installDefaultPluginSet()
 
     event("StatusUpdate", ["Please make sure you view the README for important information about changes to your source code."])
 

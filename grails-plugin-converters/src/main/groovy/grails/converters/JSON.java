@@ -1,4 +1,5 @@
-/* Copyright 2006-2007 Graeme Rocher
+/*
+ * Copyright 2006-2007 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +24,7 @@ import java.io.InputStream;
 import java.io.PushbackInputStream;
 import java.io.Reader;
 import java.io.Writer;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Stack;
+import java.util.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -37,11 +35,12 @@ import org.apache.commons.logging.LogFactory;
 import org.codehaus.groovy.grails.web.converters.AbstractConverter;
 import org.codehaus.groovy.grails.web.converters.Converter;
 import org.codehaus.groovy.grails.web.converters.ConverterUtil;
+import org.codehaus.groovy.grails.web.converters.IncludeExcludeConverter;
 import org.codehaus.groovy.grails.web.converters.configuration.ConverterConfiguration;
 import org.codehaus.groovy.grails.web.converters.configuration.ConvertersConfigurationHolder;
 import org.codehaus.groovy.grails.web.converters.configuration.DefaultConverterConfiguration;
 import org.codehaus.groovy.grails.web.converters.exceptions.ConverterException;
-import org.codehaus.groovy.grails.web.converters.marshaller.ClosureOjectMarshaller;
+import org.codehaus.groovy.grails.web.converters.marshaller.ClosureObjectMarshaller;
 import org.codehaus.groovy.grails.web.converters.marshaller.ObjectMarshaller;
 import org.codehaus.groovy.grails.web.json.JSONArray;
 import org.codehaus.groovy.grails.web.json.JSONElement;
@@ -51,6 +50,7 @@ import org.codehaus.groovy.grails.web.json.JSONTokener;
 import org.codehaus.groovy.grails.web.json.JSONWriter;
 import org.codehaus.groovy.grails.web.json.PathCapturingJSONWriterWrapper;
 import org.codehaus.groovy.grails.web.json.PrettyPrintJSONWriter;
+import org.codehaus.groovy.grails.web.mime.MimeType;
 
 /**
  * A converter that converts domain classes, Maps, Lists, Arrays, POJOs and POGOs to JSON.
@@ -58,17 +58,15 @@ import org.codehaus.groovy.grails.web.json.PrettyPrintJSONWriter;
  * @author Siegfried Puchbauer
  * @author Graeme Rocher
  */
-public class JSON extends AbstractConverter<JSONWriter> {
+public class JSON extends AbstractConverter<JSONWriter> implements IncludeExcludeConverter<JSONWriter> {
 
     private final static Log log = LogFactory.getLog(JSON.class);
     private static final String CACHED_JSON = "org.codehaus.groovy.grails.CACHED_JSON_REQUEST_CONTENT";
 
-    private Object target;
-    private final String encoding;
-    private final ConverterConfiguration<JSON> config;
-    private final CircularReferenceBehaviour circularReferenceBehaviour;
-    private boolean prettyPrint;
-
+    protected Object target;
+    protected final ConverterConfiguration<JSON> config;
+    protected final CircularReferenceBehaviour circularReferenceBehaviour;
+    protected boolean prettyPrint;
     protected JSONWriter writer;
     protected Stack<Object> referenceStack;
 
@@ -82,6 +80,7 @@ public class JSON extends AbstractConverter<JSONWriter> {
     public JSON() {
         config = initConfig();
         encoding = config != null ? config.getEncoding() : "UTF-8";
+        contentType = MimeType.JSON.getName();
         circularReferenceBehaviour = config != null ? config.getCircularReferenceBehaviour() : CircularReferenceBehaviour.DEFAULT;
         prettyPrint = config != null && config.isPrettyPrint();
     }
@@ -145,7 +144,7 @@ public class JSON extends AbstractConverter<JSONWriter> {
      * @throws ConverterException
      */
     public void render(HttpServletResponse response) throws ConverterException {
-        response.setContentType(GrailsWebUtil.getContentType("application/json", encoding));
+        response.setContentType(GrailsWebUtil.getContentType(contentType, encoding));
         try {
             render(response.getWriter());
         }
@@ -209,7 +208,7 @@ public class JSON extends AbstractConverter<JSONWriter> {
         }
     }
 
-    public ObjectMarshaller<JSON> lookupObjectMarshaller(@SuppressWarnings("hiding") Object target) {
+    public ObjectMarshaller<JSON> lookupObjectMarshaller(Object target) {
         return config.getMarshaller(target);
     }
 
@@ -229,7 +228,7 @@ public class JSON extends AbstractConverter<JSONWriter> {
      * @return a JSON String
      * @throws JSONException
      */
-    public String toString(@SuppressWarnings("hiding") boolean prettyPrint) throws JSONException {
+    public String toString(boolean prettyPrint) throws JSONException {
         String json = super.toString();
         if (prettyPrint) {
             Object jsonObject = new JSONTokener(json).nextValue();
@@ -325,7 +324,9 @@ public class JSON extends AbstractConverter<JSONWriter> {
      */
     public static Object parse(HttpServletRequest request) throws ConverterException {
         Object json = request.getAttribute(CACHED_JSON);
-        if (json != null) return json;
+        if (json != null) {
+            return json;
+        }
 
         String encoding = request.getCharacterEncoding();
         if (encoding == null) {
@@ -427,11 +428,11 @@ public class JSON extends AbstractConverter<JSONWriter> {
     }
 
     public static void registerObjectMarshaller(Class<?> clazz, Closure<?> callable) throws ConverterException {
-        registerObjectMarshaller(new ClosureOjectMarshaller<JSON>(clazz, callable));
+        registerObjectMarshaller(new ClosureObjectMarshaller<JSON>(clazz, callable));
     }
 
     public static void registerObjectMarshaller(Class<?> clazz, int priority, Closure<?> callable) throws ConverterException {
-        registerObjectMarshaller(new ClosureOjectMarshaller<JSON>(clazz, callable), priority);
+        registerObjectMarshaller(new ClosureObjectMarshaller<JSON>(clazz, callable), priority);
     }
 
     public static void registerObjectMarshaller(ObjectMarshaller<JSON> om) throws ConverterException {
@@ -484,6 +485,16 @@ public class JSON extends AbstractConverter<JSONWriter> {
         }
     }
 
+    @Override
+    public void setIncludes(List<String> includes) {
+        setIncludes(target.getClass(), includes);
+    }
+
+    @Override
+    public void setExcludes(List<String> excludes) {
+        setExcludes(target.getClass(), excludes);
+    }
+
     public class Builder extends BuilderSupport {
 
         private JSON json;
@@ -534,7 +545,9 @@ public class JSON extends AbstractConverter<JSONWriter> {
         @Override
         protected Object createNode(Object key, Map valueMap) {
             try {
-                if (stack.peek().equals(BuilderMode.OBJECT)) writer.key(String.valueOf(key));
+                if (stack.peek().equals(BuilderMode.OBJECT)) {
+                    writer.key(String.valueOf(key));
+                }
                 writer.object();
                 for (Object o : valueMap.entrySet()) {
                     Map.Entry element = (Map.Entry) o;
@@ -610,8 +623,12 @@ public class JSON extends AbstractConverter<JSONWriter> {
                 int i = ((Integer)node);
                 while (i-- > 0) {
                     last = stack.pop();
-                    if (BuilderMode.ARRAY == last) writer.endArray();
-                    if (BuilderMode.OBJECT == last) writer.endObject();
+                    if (BuilderMode.ARRAY == last) {
+                        writer.endArray();
+                    }
+                    if (BuilderMode.OBJECT == last) {
+                        writer.endObject();
+                    }
                 }
             }
             catch (JSONException e) {

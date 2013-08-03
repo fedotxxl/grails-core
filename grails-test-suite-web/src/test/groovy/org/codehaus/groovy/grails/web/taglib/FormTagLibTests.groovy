@@ -1,6 +1,9 @@
 package org.codehaus.groovy.grails.web.taglib
 
+import grails.util.MockRequestDataValueProcessor
+
 import org.codehaus.groovy.grails.plugins.web.taglib.FormTagLib
+import org.codehaus.groovy.grails.support.MockApplicationContext
 
 /**
  * Tests for the FormTagLib.groovy file which contains tags to help with the                                         l
@@ -10,25 +13,62 @@ import org.codehaus.groovy.grails.plugins.web.taglib.FormTagLib
  */
 class FormTagLibTests extends AbstractGrailsTagTests {
 
+    @Override
+    protected void setUp() {
+        super.setUp()
+        appCtx.getBean(FormTagLib.name).requestDataValueProcessor = new MockRequestDataValueProcessor()
+    }
+
     void testFormTagWithAlternativeMethod() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:form url="/foo/bar" method="delete"></g:form>'
         assertOutputEquals('<form action="/foo/bar" method="post" ><input type="hidden" name="_method" value="DELETE" id="_method" /></form>', template)
     }
 
+    void testFormTagWithAlternativeMethodAndRequestDataValueProcessor() {
+        def template = '<g:form url="/foo/bar" method="delete"></g:form>'
+        assertOutputEquals('<form action="/foo/bar" method="post" ><input type="hidden" name="_method" value="DELETE_PROCESSED_" id="_method" /><input type="hidden" name="requestDataValueProcessorHiddenName" value="hiddenValue" />\n</form>', template)
+    }
+
     // test for GRAILS-3865
     void testHiddenFieldWithZeroValue() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:hiddenField name="index" value="${0}" />'
         assertOutputContains 'value="0"', template
     }
+    void testHiddenFieldWithZeroValueAndRequestDataValueProcessor() {
+        def template = '<g:hiddenField name="index" value="${0}" />'
+        assertOutputContains 'value="0_PROCESSED_"', template
+    }
 
     void testFormTagWithStringURL() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:form url="/foo/bar"></g:form>'
         assertOutputEquals('<form action="/foo/bar" method="post" ></form>', template)
     }
 
+    void testFormTagWithStringURLAndRequestDataValueProcessor() {
+        def template = '<g:form url="/foo/bar"></g:form>'
+        assertOutputEquals('<form action="/foo/bar" method="post" ><input type="hidden" name="requestDataValueProcessorHiddenName" value="hiddenValue" />\n</form>', template)
+    }
+
     void testFormTagWithTrueUseToken() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:form url="/foo/bar" useToken="true"></g:form>'
         assertOutputContains('<form action="/foo/bar" method="post" >', template)
+        assertOutputContains('<input type="hidden" name="SYNCHRONIZER_TOKEN" value="', template)
+        assertOutputContains('<input type="hidden" name="SYNCHRONIZER_URI" value="', template)
+
+        template = '<g:form url="/foo/bar" useToken="${2 * 3 == 6}"></g:form>'
+        assertOutputContains('<form action="/foo/bar" method="post" >', template)
+        assertOutputContains('<input type="hidden" name="SYNCHRONIZER_TOKEN" value="', template)
+        assertOutputContains('<input type="hidden" name="SYNCHRONIZER_URI" value="', template)
+    }
+
+    void testFormTagWithTrueUseTokenAndRequestDataValueProcessor() {
+        def template = '<g:form url="/foo/bar" useToken="true"></g:form>'
+        assertOutputContains('<form action="/foo/bar" method="post" >', template)
+
         assertOutputContains('<input type="hidden" name="SYNCHRONIZER_TOKEN" value="', template)
         assertOutputContains('<input type="hidden" name="SYNCHRONIZER_URI" value="', template)
 
@@ -56,6 +96,7 @@ class FormTagLibTests extends AbstractGrailsTagTests {
     }
 
     void testTextFieldTag() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:textField name="testField" value="1" />'
         assertOutputEquals('<input type="text" name="testField" value="1" id="testField" />', template)
 
@@ -63,14 +104,34 @@ class FormTagLibTests extends AbstractGrailsTagTests {
         assertOutputEquals('<input type="text" name="testField" value="foo &gt; &quot; &amp; &lt; &#39;" id="testField" />', template, [value:/foo > " & < '/])
     }
 
+    void testTextFieldTagWithRequestDataValueProcessor() {
+        def template = '<g:textField name="testField" value="1" />'
+        assertOutputEquals('<input type="text" name="testField" value="1_PROCESSED_" id="testField" />', template)
+
+        template = '<g:textField name="testField" value="${value}" />'
+        assertOutputEquals('<input type="text" name="testField" value="foo &gt; &quot; &amp; &lt; &#39;_PROCESSED_" id="testField" />', template, [value:/foo > " & < '/])
+    }
+
     void testTextAreaWithBody() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:textArea name="test">This is content</g:textArea>'
         assertOutputEquals '<textarea name="test" id="test" >This is content</textarea>', template
     }
 
+    void testTextAreaWithBodyAndRequestDataValueProcessor() {
+        def template = '<g:textArea name="test">This is content</g:textArea>'
+        assertOutputEquals '<textarea name="test" id="test" >This is content_PROCESSED_</textarea>', template
+    }
+
     void testPasswordTag() {
+        unRegisterRequestDataValueProcessor()
         def template = '<g:passwordField name="myPassword" value="foo"/>'
         assertOutputEquals('<input type="password" name="myPassword" value="foo" id="myPassword" />', template)
+    }
+
+    void testPasswordTagWithRequestDataValueProcessor() {
+        def template = '<g:passwordField name="myPassword" value="foo"/>'
+        assertOutputEquals('<input type="password" name="myPassword" value="foo_PROCESSED_" id="myPassword" />', template)
     }
 
     void testFormWithURL() {
@@ -80,8 +141,22 @@ class FormTagLibTests extends AbstractGrailsTagTests {
             // use sorted map to be able to predict the order in which tag attributes are generated
             def attributes = new TreeMap([url:[controller:'con', action:'action'], id:'formElementId'])
             tag.call(attributes, { "" })
-            assertEquals '<form action="/con/action" method="post" id="formElementId" ></form>', sw.toString().trim()
         }
+        assertEquals '<form action="/con/action" method="post" id="formElementId" ></form>', sw.toString().trim()
+    }
+
+    void testFormWithURLAndRequestDataValueProcessor() {
+
+        ctx.registerMockBean('requestDataValueProcessor', new MockRequestDataValueProcessor())
+
+        final StringWriter sw = new StringWriter()
+
+        withTag("form", new PrintWriter(sw)) { tag ->
+            // use sorted map to be able to predict the order in which tag attributes are generated
+            def attributes = new TreeMap([url:[controller:'con', action:'action'], id:'formElementId'])
+            tag.call(attributes, { "" })
+        }
+        assertEquals '<form action="/con/action" method="post" id="formElementId" ><input type="hidden" name="requestDataValueProcessorHiddenName" value="hiddenValue" />\n</form>', sw.toString().trim()
     }
 
     void testActionSubmitWithoutAction() {
@@ -91,8 +166,22 @@ class FormTagLibTests extends AbstractGrailsTagTests {
             // use sorted map to be able to predict the order in which tag attributes are generated
             def attributes = new TreeMap([value:'Edit'])
             tag.call(attributes)
-            assertEquals '<input type="submit" name="_action_Edit" value="Edit" />', sw.toString() // NO TRIM, TEST WS!
         }
+        assertEquals '<input type="submit" name="_action_Edit" value="Edit" />', sw.toString() // NO TRIM, TEST WS!
+    }
+
+    void testActionSubmitWithoutActionAndWithRequestDataValueProcessor() {
+
+        ctx.registerMockBean('requestDataValueProcessor', new MockRequestDataValueProcessor())
+
+        final StringWriter sw = new StringWriter()
+
+        withTag("actionSubmit", new PrintWriter(sw)) { tag ->
+            // use sorted map to be able to predict the order in which tag attributes are generated
+            def attributes = new TreeMap([value:'Edit'])
+            tag.call(attributes)
+        }
+        assertEquals '<input type="submit" name="_action_Edit" value="Edit_PROCESSED_" />', sw.toString() // NO TRIM, TEST WS!
     }
 
     void testActionSubmitWithAction() {
@@ -102,8 +191,22 @@ class FormTagLibTests extends AbstractGrailsTagTests {
             // use sorted map to be able to predict the order in which tag attributes are generated
             def attributes = new TreeMap([action:'Edit', value:'Some label for editing'])
             tag.call(attributes)
-            assertEquals '<input type="submit" name="_action_Edit" value="Some label for editing" />', sw.toString() // NO TRIM, TEST WS!
         }
+        assertEquals '<input type="submit" name="_action_Edit" value="Some label for editing" />', sw.toString() // NO TRIM, TEST WS!
+    }
+
+    void testActionSubmitWithActionAndRequestDataValueProcessor() {
+
+        ctx.registerMockBean('requestDataValueProcessor', new MockRequestDataValueProcessor())
+
+        final StringWriter sw = new StringWriter()
+
+        withTag("actionSubmit", new PrintWriter(sw)) { tag ->
+            // use sorted map to be able to predict the order in which tag attributes are generated
+            def attributes = new TreeMap([action:'Edit', value:'Some label for editing'])
+            tag.call(attributes)
+        }
+        assertEquals '<input type="submit" name="_action_Edit" value="Some label for editing_PROCESSED_" />', sw.toString() // NO TRIM, TEST WS!
     }
 
     /**
@@ -116,8 +219,8 @@ class FormTagLibTests extends AbstractGrailsTagTests {
             // use sorted map to be able to predict the order in which tag attributes are generated
             def attributes = new TreeMap([action:'Edit', value:'Some label for editing', name:'customName'])
             tag.call(attributes)
-            assertEquals '<input type="submit" name="_action_Edit" value="Some label for editing" />', sw.toString() // NO TRIM, TEST WS!
         }
+        assertEquals '<input type="submit" name="_action_Edit" value="Some label for editing" />', sw.toString() // NO TRIM, TEST WS!
     }
 
     void testActionSubmitWithAdditionalAttributes() {
@@ -127,19 +230,34 @@ class FormTagLibTests extends AbstractGrailsTagTests {
             // use sorted map to be able to predict the order in which tag attributes are generated
             def attributes = new TreeMap([action:'Edit', value:'Some label for editing', style:'width: 200px;'])
             tag.call(attributes)
-            assertEquals '<input type="submit" name="_action_Edit" value="Some label for editing" style="width: 200px;" />', sw.toString() // NO TRIM, TEST WS!
         }
+        assertEquals '<input type="submit" name="_action_Edit" value="Some label for editing" style="width: 200px;" />', sw.toString() // NO TRIM, TEST WS!
     }
 
     void testActionSubmitImageWithoutAction() {
+        unRegisterRequestDataValueProcessor()
         final StringWriter sw = new StringWriter()
 
         withTag("actionSubmitImage", new PrintWriter(sw)) { tag ->
             // use sorted map to be able to predict the order in which tag attributes are generated
             def attributes = new TreeMap([src:'edit.gif', value:'Edit'])
             tag.call(attributes)
-            assertEquals '<input type="image" name="_action_Edit" value="Edit" src="edit.gif" />', sw.toString() // NO TRIM, TEST WS!
         }
+        assertEquals '<input type="image" name="_action_Edit" value="Edit" src="edit.gif" />', sw.toString() // NO TRIM, TEST WS!
+    }
+
+    void testActionSubmitImageWithoutActionAndWithRequestDataValueProcessor() {
+
+        ctx.registerMockBean('requestDataValueProcessor', new MockRequestDataValueProcessor())
+
+        final StringWriter sw = new StringWriter()
+
+        withTag("actionSubmitImage", new PrintWriter(sw)) { tag ->
+            // use sorted map to be able to predict the order in which tag attributes are generated
+            def attributes = new TreeMap([src:'edit.gif', value:'Edit'])
+            tag.call(attributes)
+        }
+        assertEquals '<input type="image" name="_action_Edit" value="Edit_PROCESSED_" src="edit.gif?requestDataValueProcessorParamName=paramValue" />', sw.toString() // NO TRIM, TEST WS!
     }
 
     void testActionSubmitImageWithAction() {
@@ -149,8 +267,8 @@ class FormTagLibTests extends AbstractGrailsTagTests {
             // use sorted map to be able to predict the order in which tag attributes are generated
             def attributes = new TreeMap([src:'edit.gif', action:'Edit', value:'Some label for editing'])
             tag.call(attributes)
-            assertEquals '<input type="image" name="_action_Edit" value="Some label for editing" src="edit.gif" />', sw.toString() // NO TRIM, TEST WS!
         }
+        assertEquals '<input type="image" name="_action_Edit" value="Some label for editing" src="edit.gif" />', sw.toString() // NO TRIM, TEST WS!
     }
 
     void testActionSubmitImageWithAdditionalAttributes() {
@@ -160,8 +278,8 @@ class FormTagLibTests extends AbstractGrailsTagTests {
             // use sorted map to be able to predict the order in which tag attributes are generated
             def attributes = new TreeMap([src:'edit.gif', action:'Edit', value:'Some label for editing', style:'border-line: 0px;'])
             tag.call(attributes)
-            assertEquals '<input type="image" name="_action_Edit" value="Some label for editing" src="edit.gif" style="border-line: 0px;" />', sw.toString() // NO TRIM, TEST WS!
         }
+        assertEquals '<input type="image" name="_action_Edit" value="Some label for editing" src="edit.gif" style="border-line: 0px;" />', sw.toString() // NO TRIM, TEST WS!
     }
 
     void testHtmlEscapingTextAreaTag() {
@@ -170,8 +288,8 @@ class FormTagLibTests extends AbstractGrailsTagTests {
         withTag("textArea", new PrintWriter(sw)) { tag ->
             def attributes = [name: "testField", value: "<b>some text</b>"]
             tag.call(attributes,{})
-            assertEquals '<textarea name="testField" id="testField" >&lt;b&gt;some text&lt;/b&gt;</textarea>', sw.toString()
         }
+        assertEquals '<textarea name="testField" id="testField" >&lt;b&gt;some text&lt;/b&gt;</textarea>', sw.toString()
     }
 
     void testTextAreaTag() {
@@ -180,9 +298,10 @@ class FormTagLibTests extends AbstractGrailsTagTests {
         withTag("textArea", new PrintWriter(sw)) { tag ->
             def attributes = [name: "testField", value: "1"]
             tag.call(attributes,{})
-            assertEquals '<textarea name="testField" id="testField" >1</textarea>', sw.toString()
         }
+        assertEquals '<textarea name="testField" id="testField" >1</textarea>', sw.toString()
     }
+
     void testPassingTheSameMapToTextField() {
         // GRAILS-8250
         StringWriter sw = new StringWriter()
@@ -190,21 +309,21 @@ class FormTagLibTests extends AbstractGrailsTagTests {
         def attributes = [name: 'A']
         withTag("textField", new PrintWriter(sw)) { tag ->
             tag.call(attributes)
-            assertEquals '<input type="text" name="A" value="" id="A" />', sw.toString()
         }
+        assertEquals '<input type="text" name="A" value="" id="A" />', sw.toString()
 
         sw = new StringWriter()
         attributes.name = 'B'
         withTag("textField", new PrintWriter(sw)) { tag ->
             tag.call(attributes)
-            assertEquals '<input type="text" name="B" value="" id="B" />', sw.toString()
         }
+        assertEquals '<input type="text" name="B" value="" id="B" />', sw.toString()
     }
 
     void testFieldImplDoesNotApplyAttributesFromPreviousInvocation() {
         // GRAILS-8250
         def attrs = [:]
-        def out = new StringBuilder()
+        def out = new StringWriter()
         attrs.name = 'A'
         attrs.type = 'text'
         attrs.tagName = 'textField'
@@ -213,7 +332,7 @@ class FormTagLibTests extends AbstractGrailsTagTests {
         tag.fieldImpl out, attrs
         assert '<input type="text" name="A" value="" id="A" />' == out.toString()
 
-        out = new StringBuilder()
+        out = new StringWriter()
         attrs.name = 'B'
         attrs.type = 'text'
         attrs.tagName = 'textField'
@@ -227,8 +346,8 @@ class FormTagLibTests extends AbstractGrailsTagTests {
         def sw = new StringWriter()
         withTag('textField', new PrintWriter(sw)) { tag ->
             tag.call(attributes)
-            assertEquals expected, sw.toString()
         }
+        assertEquals expected, sw.toString()
     }
 
     void testBooleanAttributes() {
@@ -288,5 +407,9 @@ class FormTagLibTests extends AbstractGrailsTagTests {
         // Test disabled for null value
         attributes = [name: 'myfield', value: '1', disabled: null]
         doTestBoolean(attributes, '<input type="text" name="myfield" value="1" id="myfield" />')
+    }
+
+    private void unRegisterRequestDataValueProcessor() {
+        appCtx.getBean(FormTagLib.name).requestDataValueProcessor = null
     }
 }

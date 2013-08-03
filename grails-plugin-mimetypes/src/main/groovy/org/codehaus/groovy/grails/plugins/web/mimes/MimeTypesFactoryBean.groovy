@@ -15,11 +15,17 @@
  */
 package org.codehaus.groovy.grails.plugins.web.mimes
 
+import groovy.transform.CompileStatic
+import groovy.transform.TypeCheckingMode
 import org.codehaus.groovy.grails.web.mime.MimeType
+import org.codehaus.groovy.grails.web.mime.MimeTypeProvider
 import org.springframework.beans.factory.FactoryBean
 import org.codehaus.groovy.grails.plugins.support.aware.GrailsApplicationAware
 import org.codehaus.groovy.grails.commons.GrailsApplication
 import org.springframework.beans.factory.InitializingBean
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.ApplicationContextAware
+import org.springframework.context.ApplicationContext
 
 /**
  * Creates the MimeType[] object that defines the configured mime types.
@@ -27,43 +33,54 @@ import org.springframework.beans.factory.InitializingBean
  * @author Graeme Rocher
  * @since 2.0
  */
-class MimeTypesFactoryBean implements FactoryBean<MimeType[]>, GrailsApplicationAware, InitializingBean {
+@CompileStatic
+class MimeTypesFactoryBean implements FactoryBean<MimeType[]>, ApplicationContextAware{
 
+    ApplicationContext applicationContext
     GrailsApplication grailsApplication
 
     private MimeType[] mimeTypes
 
     MimeType[] getObject() {
-        return mimeTypes
-    }
-
-    Class<?> getObjectType() {
-        return MimeType[].class
-    }
-
-    boolean isSingleton() { true }
-
-    void afterPropertiesSet() {
+        Collection<MimeTypeProvider> mimeTypeProviders = applicationContext ? applicationContext.getBeansOfType(MimeTypeProvider).values() : new ArrayList<MimeTypeProvider>()
+        final grailsApplication = this.grailsApplication ?: applicationContext.getBean(GrailsApplication)
         def config = grailsApplication?.config
-        def mimeConfig = config?.grails?.mime?.types
+        def mimeConfig = getMimeConfig(config)
         if (!mimeConfig) {
             mimeTypes = MimeType.createDefaults()
-            return
+            return mimeTypes
         }
 
         def mimes = []
-        for (entry in mimeConfig) {
+        for (entry in mimeConfig.entrySet()) {
             if (entry.value instanceof List) {
                 for (i in entry.value) {
-                    mimes << new MimeType(i)
-                    mimes[-1].extension = entry.key
+                    mimes << new MimeType(i.toString(),entry.key.toString())
                 }
             }
             else {
-                mimes << new MimeType(entry.value)
-                mimes[-1].extension = entry.key
+                mimes << new MimeType(entry.value.toString(), entry.key.toString())
             }
         }
-        mimeTypes = mimes as MimeType[]
+        for(MimeTypeProvider mtp in mimeTypeProviders) {
+            for(MimeType mt in mtp.mimeTypes) {
+                if (!mimes.contains(mt)) {
+                    mimes << mt
+                }
+            }
+        }
+        mimeTypes = mimes
+        mimeTypes
+
+    }
+
+    Class<?> getObjectType() { MimeType[] }
+
+    boolean isSingleton() { true }
+
+
+    @CompileStatic(TypeCheckingMode.SKIP)
+    protected Map<CharSequence, CharSequence> getMimeConfig(ConfigObject config) {
+        config?.grails?.mime?.types
     }
 }

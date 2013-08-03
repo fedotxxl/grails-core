@@ -47,6 +47,7 @@ import org.springframework.util.Assert;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.context.request.WebRequestInterceptor;
 import org.springframework.web.context.support.WebApplicationContextUtils;
 import org.springframework.web.multipart.MultipartException;
@@ -105,6 +106,16 @@ public class GrailsDispatcherServlet extends DispatcherServlet {
     protected void initFrameworkServlet() throws ServletException, BeansException {
         super.initFrameworkServlet();
         initMultipartResolver();
+    }
+
+    @Override
+    protected ServletRequestAttributes buildRequestAttributes(HttpServletRequest request, HttpServletResponse response, RequestAttributes previousAttributes) {
+        if(previousAttributes instanceof GrailsWebRequest) {
+            return null;
+        }
+        else {
+            return super.buildRequestAttributes(request, response, previousAttributes);
+        }
     }
 
     /**
@@ -197,7 +208,7 @@ public class GrailsDispatcherServlet extends DispatcherServlet {
     protected HandlerInterceptor[] establishInterceptors(WebApplicationContext webContext) {
         String[] interceptorNames = webContext.getBeanNamesForType(HandlerInterceptor.class);
         String[] webRequestInterceptors = webContext.getBeanNamesForType(WebRequestInterceptor.class);
-        @SuppressWarnings("hiding") HandlerInterceptor[] interceptors = new HandlerInterceptor[interceptorNames.length + webRequestInterceptors.length];
+        HandlerInterceptor[] interceptors = new HandlerInterceptor[interceptorNames.length + webRequestInterceptors.length];
 
         // Merge the handler and web request interceptors into a single array. Note that we
         // start with the web request interceptors to ensure that the OpenSessionInViewInterceptor
@@ -281,8 +292,14 @@ public class GrailsDispatcherServlet extends DispatcherServlet {
                 }
                 // Expose current RequestAttributes to current thread.
                 previousRequestAttributes = RequestContextHolder.currentRequestAttributes();
-                requestAttributes = new GrailsWebRequest(processedRequest, response, getServletContext());
-                copyParamsFromPreviousRequest(previousRequestAttributes, requestAttributes);
+                if(previousRequestAttributes instanceof GrailsWebRequest) {
+                    requestAttributes = new GrailsWebRequest(processedRequest, response, ((GrailsWebRequest)previousRequestAttributes).getAttributes());
+                } else {
+                    requestAttributes = new GrailsWebRequest(processedRequest, response, getServletContext());
+                }
+                if( previousRequestAttributes != null) {
+                    copyParamsFromPreviousRequest(previousRequestAttributes, requestAttributes);
+                }
 
                 // Update the current web request.
                 WebUtils.storeGrailsWebRequest(requestAttributes);
@@ -294,20 +311,24 @@ public class GrailsDispatcherServlet extends DispatcherServlet {
 
                 // Determine handler for the current request.
                 mappedHandler = getHandler(processedRequest);
-                if (mappedHandler == null || mappedHandler.getHandler() == null) {
+                Object handler = mappedHandler.getHandler();
+                if (mappedHandler == null || handler == null) {
                     noHandlerFound(processedRequest, response);
                     return;
                 }
 
+                HandlerInterceptor[] interceptors = mappedHandler.getInterceptors();
+
                 // Apply preHandle methods of registered interceptors.
-                if (mappedHandler.getInterceptors() != null) {
-                    for (int i = 0; i < mappedHandler.getInterceptors().length; i++) {
-                        HandlerInterceptor interceptor = mappedHandler.getInterceptors()[i];
-                        if (!interceptor.preHandle(processedRequest, response, mappedHandler.getHandler())) {
+                if (interceptors != null) {
+                    int i = 0;
+                    for (HandlerInterceptor interceptor : interceptors) {
+                        if (!interceptor.preHandle(processedRequest, response, handler)) {
                             triggerAfterCompletion(mappedHandler, interceptorIndex, processedRequest, response, null);
                             return;
                         }
                         interceptorIndex = i;
+                        i++;
                     }
                 }
 
@@ -321,11 +342,10 @@ public class GrailsDispatcherServlet extends DispatcherServlet {
                     else {
                         mv = null;
                     }
-
                 }else {
                     // Actually invoke the handler.
-                    HandlerAdapter ha = getHandlerAdapter(mappedHandler.getHandler());
-                    mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+                    HandlerAdapter ha = getHandlerAdapter(handler);
+                    mv = ha.handle(processedRequest, response, handler);
                     // if an async request was started simply return
                     if (processedRequest.getAttribute(GrailsApplicationAttributes.ASYNC_STARTED) != null) {
                         processedRequest.setAttribute(GrailsApplicationAttributes.MODEL_AND_VIEW, mv);
@@ -339,10 +359,9 @@ public class GrailsDispatcherServlet extends DispatcherServlet {
                 }
 
                 // Apply postHandle methods of registered interceptors.
-                if (mappedHandler.getInterceptors() != null) {
-                    for (int i = mappedHandler.getInterceptors().length - 1; i >= 0; i--) {
-                        HandlerInterceptor interceptor = mappedHandler.getInterceptors()[i];
-                        interceptor.postHandle(processedRequest, response, mappedHandler.getHandler(), mv);
+                if (interceptors != null) {
+                    for (int i = interceptors.length - 1; i >= 0; i--) {
+                        interceptors[i].postHandle(processedRequest, response, handler, mv);
                     }
                 }
             }
@@ -355,7 +374,7 @@ public class GrailsDispatcherServlet extends DispatcherServlet {
             }
             catch (Exception ex) {
                 handlerException = ex;
-                Object handler = (mappedHandler != null ? mappedHandler.getHandler() : null);
+                Object handler = mappedHandler == null ? null : mappedHandler.getHandler();
                 mv = processHandlerException(request, response, handler, ex);
                 errorView = (mv != null);
             }
@@ -476,12 +495,7 @@ public class GrailsDispatcherServlet extends DispatcherServlet {
             return;
         }
 
-        Map previousParams = ((GrailsWebRequest)previousRequestAttributes).getParams();
-        Map params =  requestAttributes.getParams();
-        for (Object o : previousParams.keySet()) {
-            String name = (String) o;
-            params.put(name, previousParams.get(name));
-        }
+        requestAttributes.addParametersFrom(((GrailsWebRequest)previousRequestAttributes).getParams());
     }
 
     /**

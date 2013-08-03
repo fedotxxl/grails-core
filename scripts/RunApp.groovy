@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 
-import org.codehaus.groovy.grails.cli.fork.ForkedGrailsProcess
-
 /**
- * Gant script that executes Grails using an embedded Jetty server
+ * Gant script that executes Grails using an embedded server.
  *
  * @author Graeme Rocher
  *
@@ -36,8 +34,5 @@ target('default': "Runs a Grails application") {
     }
 
     startPluginScanner()
-
-    if (!(grailsServer instanceof ForkedGrailsProcess)) {
-        watchContext()
-    }
+    watchContext()
 }

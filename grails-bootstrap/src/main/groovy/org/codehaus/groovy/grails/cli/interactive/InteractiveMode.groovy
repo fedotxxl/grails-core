@@ -19,6 +19,9 @@ import grails.build.logging.GrailsConsole
 import grails.util.BuildSettings
 import grails.util.BuildSettingsHolder
 import grails.util.Environment
+import groovy.transform.CompileStatic
+import org.codehaus.groovy.grails.cli.fork.ForkedGrailsProcess
+import org.codehaus.groovy.grails.cli.fork.testing.ForkedGrailsTestRunner
 
 import java.awt.Desktop
 
@@ -56,6 +59,8 @@ class InteractiveMode {
 
     protected MetaClassRegistryCleaner registryCleaner = MetaClassRegistryCleaner.createAndRegister()
 
+    protected GrailsInteractiveCompletor interactiveCompletor
+
     InteractiveMode(BuildSettings settings, GrailsScriptRunner scriptRunner) {
         this.scriptRunner = scriptRunner
         this.settings = settings
@@ -85,7 +90,8 @@ class InteractiveMode {
         current = this
         System.setProperty("grails.disable.exit", "true") // you can't exit completely in interactive mode from a script
 
-        console.reader.addCompletor(new GrailsInteractiveCompletor(settings, scriptRunner.availableScripts))
+        interactiveCompletor = new GrailsInteractiveCompletor(settings, scriptRunner.availableScripts)
+        console.reader.addCompletor(interactiveCompletor)
         interactiveModeActive = true
         System.setProperty(Environment.INTERACTIVE_MODE_ENABLED, "true")
 
@@ -93,6 +99,16 @@ class InteractiveMode {
         String originalGrailsEnv = System.getProperty(Environment.KEY)
         String originalGrailsEnvDefault = System.getProperty(Environment.DEFAULT)
         addStatus("Enter a script name to run. Use TAB for completion: ")
+
+        Runtime.addShutdownHook {
+            final files = settings.projectWorkDir.listFiles()
+            if (files) {
+                final toDelete = files.findAll { File f -> f.name.endsWith("-resume") && f.directory }
+                toDelete*.delete()
+            }
+        }
+
+        startBackgroundTestRunner()
 
         while (interactiveModeActive) {
             String scriptName = showPrompt()
@@ -114,10 +130,16 @@ class InteractiveMode {
                     }
                     else if ("quit".equals(trimmed)) {
                         quit()
-                    } else if('stop-app'.equals(trimmed)) {
+                    } else if ('stop-app'.equals(trimmed)) {
                         stopApp()
                     } else if ("exit".equals(trimmed)) {
                         exit()
+                    }
+                    else if ("restart-daemon".equals(trimmed)) {
+                        restartDaemon()
+                    }
+                    else if ("start-daemon".equals(trimmed)) {
+                        restartDaemon()
                     }
                     else if (scriptName.startsWith("open ")) {
                         open scriptName
@@ -171,6 +193,37 @@ class InteractiveMode {
         System.setProperty(Environment.INTERACTIVE_MODE_ENABLED, "true")
     }
 
+    boolean backgroundTestRunnerStarted = false
+    @CompileStatic
+    protected void startBackgroundTestRunner() {
+        if (backgroundTestRunnerStarted) return
+
+        backgroundTestRunnerStarted = true
+        Thread.start {
+            // start a background JVM ready to run tests
+            if (settings.forkSettings.test) {
+                final runner = new ForkedGrailsTestRunner(settings)
+                if (settings.forkSettings.test instanceof Map) {
+                    runner.configure((Map) settings.forkSettings.test)
+                }
+                if (runner.isForkingReserveEnabled()) {
+                    runner.forkReserve()
+                }
+                else if (runner.daemon) {
+                    runner.restartDaemon()
+                }
+            }
+        }
+    }
+
+    @CompileStatic
+    void restartDaemon() {
+        final runner = new ForkedGrailsTestRunner(settings)
+        if (settings.forkSettings.test instanceof Map) {
+            runner.configure((Map) settings.forkSettings.test)
+        }
+        runner.restartDaemon()
+    }
     protected void quit() {
         exit true
     }
@@ -181,7 +234,7 @@ class InteractiveMode {
     }
 
     protected void stopApp() {
-        if(settings.forkSettings?.get('run')) {
+        if (settings.forkSettings?.get('run')) {
             parseAndExecute 'stop-app'
         } else if (grailsServer) {
             try {
@@ -197,7 +250,7 @@ class InteractiveMode {
     }
 
     protected void exit(boolean shouldStopApp = false) {
-        if(shouldStopApp) {
+        if (shouldStopApp) {
             stopApp()
         }
         goodbye()
@@ -277,6 +330,12 @@ class InteractiveMode {
         def parser = GrailsScriptRunner.getCommandLineParser()
         def commandLine = parser.parseString(scriptName)
         prepareConsole(commandLine)
+        if (commandLine.hasOption(CommandLine.DEBUG_FORK)) {
+            System.setProperty(ForkedGrailsProcess.DEBUG_FORK, "true")
+        }
+        else {
+            System.setProperty(ForkedGrailsProcess.DEBUG_FORK, "false")
+        }
         scriptRunner.executeScriptWithCaching(commandLine)
     }
 
@@ -291,5 +350,10 @@ class InteractiveMode {
      */
     protected unescape(String str) {
         return str.replace('\\', '')
+    }
+
+    void refresh() {
+        final scripts = scriptRunner.getAvailableScripts()
+        interactiveCompletor.setCandidateStrings(GrailsInteractiveCompletor.getScriptNames(scripts))
     }
 }

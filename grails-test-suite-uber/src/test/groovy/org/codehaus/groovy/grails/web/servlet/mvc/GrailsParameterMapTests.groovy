@@ -1,11 +1,11 @@
 package org.codehaus.groovy.grails.web.servlet.mvc
 
-import org.springframework.mock.web.MockHttpServletRequest
 import grails.util.GrailsWebUtil
-import org.springframework.web.context.request.RequestContextHolder
-import org.springframework.web.context.WebApplicationContext
+
 import org.codehaus.groovy.grails.support.MockApplicationContext
 import org.springframework.context.support.StaticMessageSource
+import org.springframework.mock.web.MockHttpServletRequest
+import org.springframework.web.context.request.RequestContextHolder
 
 class GrailsParameterMapTests extends GroovyTestCase {
 
@@ -63,7 +63,6 @@ class GrailsParameterMapTests extends GroovyTestCase {
 
         assert 'bar' == params.foo
         assert 'two' == params.one
-
 
         params = new GrailsParameterMap(request)
         assert params.foo == null // should be null, request can't be parsed twice
@@ -218,7 +217,6 @@ class GrailsParameterMapTests extends GroovyTestCase {
         mockRequest.addParameter("foo_year", "")
         mockRequest.addParameter("foo_month", "")
 
-
         theMap = new GrailsParameterMap(mockRequest)
         assert theMap['foo'] == null : "should be null"
     }
@@ -324,5 +322,37 @@ class GrailsParameterMapTests extends GroovyTestCase {
         theMap.each { k, v ->
             assertEquals("the clone should have the same value for $k as the original", theMap[k], theClone[k])
         }
+    }
+
+    void testNestedKeyAutoGeneration() {
+        def request = new MockHttpServletRequest()
+        def params = new GrailsParameterMap(request)
+
+        params.'company.department.team.numberOfEmployees' = 42
+        params.'company.department.numberOfEmployees' = 2112
+        def firstKey = 'alpha'
+        def secondKey = 'beta'
+        params."${firstKey}.${secondKey}.foo" = 'omega'
+        params.put "prefix.${firstKey}.${secondKey}", 'delta'
+
+        def company = params.company
+        assert company instanceof Map
+
+        def department = company.department
+        assert department instanceof Map
+        assert department.numberOfEmployees == 2112
+
+        def team = department.team
+        assert team instanceof Map
+
+        assert team.numberOfEmployees == 42
+
+        assert params['alpha'] instanceof Map
+        assert params['alpha']['beta'] instanceof Map
+        assert params['alpha']['beta'].foo == 'omega'
+
+        assert params['prefix'] instanceof Map
+        assert params['prefix']['alpha'] instanceof Map
+        assert params['prefix']['alpha'].beta == 'delta'
     }
 }

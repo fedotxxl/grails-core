@@ -70,6 +70,10 @@ public class GrailsContentBufferingResponse extends HttpServletResponseWrapper {
         return pageResponseWrapper.isSitemeshActive() || pageResponseWrapper.isGspSitemeshActive();
     }
 
+    public void deactivateSitemesh() {
+        pageResponseWrapper.deactivateSiteMesh();
+    }
+
     public Content getContent() throws IOException {
         if (!pageResponseWrapper.isSitemeshActive()) {
             return null;

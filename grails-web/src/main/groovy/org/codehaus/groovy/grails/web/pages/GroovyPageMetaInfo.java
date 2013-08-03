@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,18 +27,17 @@ import java.util.Collections;
 import java.util.Map;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.codehaus.groovy.grails.commons.CodecArtefactHandler;
 import org.codehaus.groovy.grails.commons.GrailsApplication;
-import org.codehaus.groovy.grails.commons.GrailsClass;
 import org.codehaus.groovy.grails.plugins.GrailsPlugin;
 import org.codehaus.groovy.grails.plugins.GrailsPluginManager;
 import org.codehaus.groovy.grails.plugins.support.aware.GrailsApplicationAware;
+import org.codehaus.groovy.grails.support.encoding.Encoder;
 import org.codehaus.groovy.grails.web.pages.exceptions.GroovyPagesException;
 import org.codehaus.groovy.grails.web.pages.ext.jsp.TagLibraryResolver;
 import org.codehaus.groovy.grails.web.util.CacheEntry;
+import org.codehaus.groovy.grails.web.util.WithCodecHelper;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -66,8 +66,14 @@ public class GroovyPageMetaInfo implements GrailsApplicationAware {
     @SuppressWarnings("rawtypes")
     private Map jspTags = Collections.EMPTY_MAP;
     private GroovyPagesException compilationException;
-    private String codecName;
-    private Class<?> codecClass;
+    private Encoder expressionEncoder;
+    private Encoder staticEncoder;
+    private Encoder outEncoder;
+    private Encoder taglibEncoder;
+    private String expressionCodecName;
+    private String staticCodecName;
+    private String outCodecName;
+    private String taglibCodecName;
 
     public static final String HTML_DATA_POSTFIX = "_html.data";
     public static final String LINENUMBERS_DATA_POSTFIX = "_linenumbers.data";
@@ -81,6 +87,7 @@ public class GroovyPageMetaInfo implements GrailsApplicationAware {
     private boolean initialized = false;
 
     private CacheEntry<Resource> shouldReloadCacheEntry = new CacheEntry<Resource>(null);
+    public static String DEFAULT_PLUGIN_PATH = "";
 
     public GroovyPageMetaInfo() {
         shouldReloadCacheEntry.expire();
@@ -94,7 +101,10 @@ public class GroovyPageMetaInfo implements GrailsApplicationAware {
         contentType = (String)ReflectionUtils.getField(ReflectionUtils.findField(pageClass, GroovyPageParser.CONSTANT_NAME_CONTENT_TYPE), null);
         jspTags = (Map)ReflectionUtils.getField(ReflectionUtils.findField(pageClass, GroovyPageParser.CONSTANT_NAME_JSP_TAGS), null);
         lastModified = (Long)ReflectionUtils.getField(ReflectionUtils.findField(pageClass, GroovyPageParser.CONSTANT_NAME_LAST_MODIFIED), null);
-        codecName = (String)ReflectionUtils.getField(ReflectionUtils.findField(pageClass, GroovyPageParser.CONSTANT_NAME_DEFAULT_CODEC), null);
+        expressionCodecName = (String)ReflectionUtils.getField(ReflectionUtils.findField(pageClass, GroovyPageParser.CONSTANT_NAME_EXPRESSION_CODEC), null);
+        staticCodecName = (String)ReflectionUtils.getField(ReflectionUtils.findField(pageClass, GroovyPageParser.CONSTANT_NAME_STATIC_CODEC), null);
+        outCodecName = (String)ReflectionUtils.getField(ReflectionUtils.findField(pageClass, GroovyPageParser.CONSTANT_NAME_OUT_CODEC), null);
+        taglibCodecName = (String)ReflectionUtils.getField(ReflectionUtils.findField(pageClass, GroovyPageParser.CONSTANT_NAME_TAGLIB_CODEC), null);
 
         try {
             readHtmlData();
@@ -114,38 +124,19 @@ public class GroovyPageMetaInfo implements GrailsApplicationAware {
         }
     }
 
-    @SuppressWarnings("rawtypes")
     public void initialize() {
-        if (codecName == null) {
-            Map config = grailsApplication != null ? grailsApplication.getFlatConfig() : null;
-            if (config != null) {
-                Object o = config.get(GroovyPageParser.CONFIG_PROPERTY_DEFAULT_CODEC);
-                if (o != null) {
-                    codecName = o.toString();
-                }
-            }
-        }
-
-        GrailsClass codecGrailsClass = null;
-        if (codecName != null&& grailsApplication != null) {
-            codecGrailsClass = grailsApplication.getArtefactByLogicalPropertyName(
-                    CodecArtefactHandler.TYPE, codecName);
-            if (codecGrailsClass == null) {
-                codecGrailsClass = grailsApplication.getArtefactByLogicalPropertyName(
-                        CodecArtefactHandler.TYPE, codecName.toUpperCase());
-            }
-        }
-
-        if (codecGrailsClass == null && StringUtils.isNotBlank(codecName) && !"none".equalsIgnoreCase(codecName)) {
-            LOG.warn("Couldn't initialize Codec by name '" + codecName + "' , pageClass=" + ((pageClass!=null)?pageClass.getName():null));
-        }
-        if (codecGrailsClass!=null) {
-            codecClass = codecGrailsClass.getClazz();
-        }
+        expressionEncoder = getCodec(expressionCodecName);
+        staticEncoder = getCodec(staticCodecName);
+        outEncoder = getCodec(outCodecName);
+        taglibEncoder = getCodec(taglibCodecName);
 
         initializePluginPath();
 
         initialized = true;
+    }
+
+    private Encoder getCodec(String codecName) {
+        return WithCodecHelper.lookupEncoder(grailsApplication, codecName);
     }
 
     private void initializePluginPath() {
@@ -160,7 +151,7 @@ public class GroovyPageMetaInfo implements GrailsApplicationAware {
 
         GrailsPluginManager pluginManager = applicationContext.getBean(GrailsPluginManager.BEAN_NAME, GrailsPluginManager.class);
         pluginPath = pluginManager.getPluginPathForClass(pageClass);
-        if (pluginPath == null) pluginPath="";
+        if (pluginPath == null) pluginPath=DEFAULT_PLUGIN_PATH ;
         pagePlugin = pluginManager.getPluginForClass(pageClass);
     }
 
@@ -329,18 +320,6 @@ public class GroovyPageMetaInfo implements GrailsApplicationAware {
         this.htmlParts = htmlParts;
     }
 
-    public Class<?> getCodecClass() {
-        return codecClass;
-    }
-
-    public String getCodecName() {
-        return codecName;
-    }
-
-    public void setCodecName(String codecName) {
-        this.codecName = codecName;
-    }
-
     public void applyLastModifiedFromResource(Resource resource) {
         this.lastModified = establishLastModified(resource);
     }
@@ -450,5 +429,37 @@ public class GroovyPageMetaInfo implements GrailsApplicationAware {
 
     public GrailsPlugin getPagePlugin() {
         return pagePlugin;
+    }
+
+    public Encoder getOutEncoder() {
+        return outEncoder;
+    }
+
+    public Encoder getStaticEncoder() {
+        return staticEncoder;
+    }
+
+    public Encoder getExpressionEncoder() {
+        return expressionEncoder;
+    }
+
+    public Encoder getTaglibEncoder() {
+        return taglibEncoder;
+    }
+
+    public void setExpressionCodecName(String expressionCodecName) {
+        this.expressionCodecName = expressionCodecName;
+    }
+
+    public void setStaticCodecName(String staticCodecName) {
+        this.staticCodecName = staticCodecName;
+    }
+
+    public void setOutCodecName(String pageCodecName) {
+        this.outCodecName = pageCodecName;
+    }
+
+    public void setTaglibCodecName(String taglibCodecName) {
+        this.taglibCodecName = taglibCodecName;
     }
 }

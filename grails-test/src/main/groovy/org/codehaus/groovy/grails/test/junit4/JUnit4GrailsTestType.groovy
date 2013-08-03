@@ -15,6 +15,10 @@
  */
 package org.codehaus.groovy.grails.test.junit4
 
+import groovy.transform.CompileStatic
+import groovy.transform.TypeCheckingMode
+import org.codehaus.groovy.grails.test.GrailsTestTargetPattern
+
 import java.lang.reflect.Modifier
 
 import org.codehaus.groovy.grails.test.GrailsTestTypeResult
@@ -34,10 +38,10 @@ import org.junit.runners.Suite
  */
 class JUnit4GrailsTestType extends GrailsTestTypeSupport {
 
-    static final SUFFIXES = ["Test", "Tests"].asImmutable()
+    static final List<String> SUFFIXES = ["Test", "Tests"].asImmutable()
 
     protected suite
-    protected mode
+    protected GrailsTestMode mode
 
     JUnit4GrailsTestType(String name, String sourceDirectory) {
         this(name, sourceDirectory, null)
@@ -63,7 +67,7 @@ class JUnit4GrailsTestType extends GrailsTestTypeSupport {
 
     protected getTestClasses() {
         def classes = []
-        eachSourceFile { testTargetPattern, sourceFile ->
+        eachSourceFile { GrailsTestTargetPattern testTargetPattern, File sourceFile ->
             def testClass = sourceFileToClass(sourceFile)
             if (!Modifier.isAbstract(testClass.modifiers)) {
                 classes << testClass
@@ -85,14 +89,16 @@ class JUnit4GrailsTestType extends GrailsTestTypeSupport {
         new Suite(createRunnerBuilder(), classes as Class[])
     }
 
+    @CompileStatic
     protected createJUnitReportsFactory() {
         JUnitReportsFactory.createFromBuildBinding(buildBinding)
     }
 
-    protected createListener(eventPublisher) {
+    protected createListener(GrailsTestEventPublisher eventPublisher) {
         new SuiteRunListener(eventPublisher, createJUnitReportsFactory(), createSystemOutAndErrSwapper())
     }
 
+    @CompileStatic(TypeCheckingMode.SKIP)
     protected createNotifier(eventPublisher) {
         int total = 0
         if (suite.hasProperty("children")) {

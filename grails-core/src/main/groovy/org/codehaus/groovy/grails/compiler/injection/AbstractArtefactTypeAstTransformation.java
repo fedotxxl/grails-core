@@ -16,17 +16,17 @@
 package org.codehaus.groovy.grails.compiler.injection;
 
 import grails.build.logging.GrailsConsole;
+
+import java.util.List;
+
 import org.codehaus.groovy.ast.ClassNode;
 import org.codehaus.groovy.control.CompilePhase;
 import org.codehaus.groovy.control.SourceUnit;
 import org.codehaus.groovy.transform.ASTTransformation;
 import org.codehaus.groovy.transform.GroovyASTTransformation;
 
-import java.util.List;
-
 /**
- *
- * Base implementation for the artefact type transformation
+ * Base implementation for the artefact type transformation.
  *
  * @author Graeme Rocher
  * @since 2.0

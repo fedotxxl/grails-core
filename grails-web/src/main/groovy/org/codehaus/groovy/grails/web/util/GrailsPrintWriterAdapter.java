@@ -1,4 +1,5 @@
-/* Copyright 2011 SpringSource.
+/*
+ * Copyright 2011 SpringSource.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,17 +22,40 @@ import java.io.PrintWriter;
 import java.io.Writer;
 
 import org.apache.commons.io.output.NullWriter;
+import org.objenesis.ObjenesisStd;
+import org.objenesis.instantiator.ObjectInstantiator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author Lari Hotari
  * @since 2.0
  */
 public class GrailsPrintWriterAdapter extends PrintWriter implements GrailsWrappedWriter {
+    private static final Logger LOG = LoggerFactory.getLogger(GrailsPrintWriterAdapter.class);
     protected GrailsPrintWriter target;
+
+    private static ObjectInstantiator instantiator;
+    static {
+        try {
+            instantiator = new ObjenesisStd(false).getInstantiatorOf(GrailsPrintWriterAdapter.class);
+        } catch (Exception e) {
+            LOG.debug("Couldn't get direct performance optimized instantiator for GrailsPrintWriterAdapter. Using default instantiation.", e);
+        }
+    }
 
     public GrailsPrintWriterAdapter(Writer wrapped) {
         super(new NullWriter());
         setTarget(wrapped);
+    }
+
+    public static GrailsPrintWriterAdapter newInstance(Writer wrapped) {
+        if (instantiator != null) {
+            GrailsPrintWriterAdapter instance = (GrailsPrintWriterAdapter)instantiator.newInstance();
+            instance.setTarget(wrapped);
+            return instance;
+        }
+        return new GrailsPrintWriterAdapter(wrapped);
     }
 
     public void setTarget(Writer wrapped) {
@@ -41,10 +65,12 @@ public class GrailsPrintWriterAdapter extends PrintWriter implements GrailsWrapp
         else {
             this.target = new GrailsPrintWriter(wrapped);
         }
+        this.out = this.target;
+        this.lock = this.out != null ? this.out : this;
     }
 
     public boolean isAllowUnwrappingOut() {
-        return target.isAllowUnwrappingOut();
+        return true;
     }
 
     public GrailsPrintWriter getTarget() {
@@ -56,10 +82,7 @@ public class GrailsPrintWriterAdapter extends PrintWriter implements GrailsWrapp
     }
 
     public Writer unwrap() {
-        if (isAllowUnwrappingOut()) {
-            return getOut();
-        }
-        return this;
+        return target.unwrap();
     }
 
     public GrailsPrintWriter leftShift(Object value) throws IOException {

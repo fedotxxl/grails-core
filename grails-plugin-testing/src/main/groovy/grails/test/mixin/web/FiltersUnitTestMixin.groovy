@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package grails.test.mixin.web
 
 import org.codehaus.groovy.grails.plugins.web.filters.CompositeInterceptor
@@ -75,7 +74,7 @@ class FiltersUnitTestMixin extends ControllerUnitTestMixin {
             bindGrailsWebRequest()
         }
         if (!grailsApplication.hasArtefactHandler(FiltersConfigArtefactHandler.TYPE)) {
-            grailsApplication.registerArtefactHandler(new FiltersConfigArtefactHandler());
+            grailsApplication.registerArtefactHandler(new FiltersConfigArtefactHandler())
         }
 
         final grailsFilter = grailsApplication.addArtefact(FiltersConfigArtefactHandler.TYPE, filterClass)
@@ -91,7 +90,6 @@ class FiltersUnitTestMixin extends ControllerUnitTestMixin {
                 bean.autowire = true
             }
         }
-
 
         FiltersGrailsPlugin.reloadFilters(grailsApplication, applicationContext)
         return getCompositeInterceptor()

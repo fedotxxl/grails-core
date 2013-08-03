@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,15 +34,19 @@ public abstract class AbstractUrlMapping implements UrlMapping {
     protected final ConstrainedProperty[] constraints;
     protected Object controllerName;
     protected Object actionName;
+    protected Object namespace;
     protected Object pluginName;
     protected Object viewName;
     protected Object forwardURI;
+    protected Object redirectInfo;
     protected ServletContext servletContext;
     @SuppressWarnings("rawtypes")
     protected Map parameterValues = Collections.EMPTY_MAP;
     protected boolean parseRequest;
     protected String mappingName;
     protected boolean restful;
+    protected String httpMethod = ANY_HTTP_METHOD;
+    protected String version = ANY_VERSION;
 
     /**
      * Base constructor required to construct a UrlMapping instance
@@ -51,13 +56,15 @@ public abstract class AbstractUrlMapping implements UrlMapping {
      * @param constraints Any constraints that apply to the mapping
      * @param servletContext
      */
-    public AbstractUrlMapping(Object controllerName, Object actionName, Object pluginName, Object viewName, ConstrainedProperty[] constraints, ServletContext servletContext) {
+    public AbstractUrlMapping(Object redirectInfo, Object controllerName, Object actionName, Object namespace, Object pluginName, Object viewName, ConstrainedProperty[] constraints, ServletContext servletContext) {
         this.controllerName = controllerName;
         this.actionName = actionName;
+        this.namespace = namespace;
         this.pluginName = pluginName;
         this.constraints = constraints;
         this.viewName = viewName;
         this.servletContext = servletContext;
+        this.redirectInfo = redirectInfo;
     }
 
     protected AbstractUrlMapping(Object viewName, ConstrainedProperty[] constraints, ServletContext servletContext) {
@@ -70,6 +77,16 @@ public abstract class AbstractUrlMapping implements UrlMapping {
         this.forwardURI = uri;
         this.constraints = constraints;
         this.servletContext = servletContext;
+    }
+
+    @Override
+    public String getHttpMethod() {
+        return httpMethod;
+    }
+
+    @Override
+    public String getVersion() {
+        return version;
     }
 
     /**
@@ -96,10 +113,13 @@ public abstract class AbstractUrlMapping implements UrlMapping {
     public Object getPluginName() {
         return pluginName;
     }
-    
+
+    public Object getNamespace() {
+        return namespace;
+    }
+
     /**
      * @see org.codehaus.groovy.grails.web.mapping.UrlMapping#getViewName()
-     *
      */
     public Object getViewName() {
         return viewName;
@@ -138,5 +158,9 @@ public abstract class AbstractUrlMapping implements UrlMapping {
             }
         }
         return false;
+    }
+    
+    public Object getRedirectInfo() {
+        return redirectInfo;
     }
 }

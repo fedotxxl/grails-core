@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.codehaus.groovy.grails.plugins.web.mapping;
+package org.codehaus.groovy.grails.plugins.web.mapping
 
+import grails.util.Environment
 import grails.util.GrailsUtil
 import grails.web.CamelCaseUrlConverter
 import grails.web.HyphenatedUrlConverter
@@ -23,7 +24,9 @@ import org.codehaus.groovy.grails.commons.GrailsApplication
 import org.codehaus.groovy.grails.commons.UrlMappingsArtefactHandler
 import org.codehaus.groovy.grails.plugins.GrailsPluginManager
 import org.codehaus.groovy.grails.web.mapping.CachingLinkGenerator
+import org.codehaus.groovy.grails.web.mapping.DefaultLinkGenerator
 import org.codehaus.groovy.grails.web.mapping.LinkGenerator
+import org.codehaus.groovy.grails.web.mapping.UrlMappings
 import org.codehaus.groovy.grails.web.mapping.UrlMappingsHolder
 import org.codehaus.groovy.grails.web.mapping.UrlMappingsHolderFactoryBean
 import org.codehaus.groovy.grails.web.mapping.filter.UrlMappingsFilter
@@ -34,8 +37,8 @@ import org.springframework.context.ApplicationContext
 import org.springframework.core.io.Resource
 import org.springframework.web.context.WebApplicationContext
 
- /**
- * Handles the configuration of URL mappings for Grails.
+/**
+ * Handles the configuration of URL mappings.
  *
  * @author Graeme Rocher
  * @since 0.4
@@ -48,25 +51,35 @@ class UrlMappingsGrailsPlugin {
     def dependsOn = [core:version]
 
     def doWithSpring = {
-        def serverURL = null
-        final configuredServerURL = application.config?.grails?.serverURL
-        if (configuredServerURL) {
-            serverURL = configuredServerURL
-        }
+        String serverURL = application.config?.grails?.serverURL ?: null
 
         def urlConverterType = application.config?.grails?.web?.url?.converter
         "${grails.web.UrlConverter.BEAN_NAME}"('hyphenated' == urlConverterType ? HyphenatedUrlConverter : CamelCaseUrlConverter)
-        grailsLinkGenerator(CachingLinkGenerator, serverURL)
-        "org.grails.internal.URL_MAPPINGS_HOLDER"(UrlMappingsHolderFactoryBean) { bean ->
-            bean.lazyInit = true
+
+        def cacheUrls = application.config?.grails?.web?.linkGenerator?.useCache
+        if (!(cacheUrls instanceof Boolean)) {
+            cacheUrls = true
         }
-        urlMappingsTargetSource(org.springframework.aop.target.HotSwappableTargetSource, ref("org.grails.internal.URL_MAPPINGS_HOLDER")) { bean ->
-            bean.lazyInit = true
-        }
-        grailsUrlMappingsHolder(ProxyFactoryBean) { bean ->
-            bean.lazyInit = true
-            targetSource = urlMappingsTargetSource
-            proxyInterfaces = [org.codehaus.groovy.grails.web.mapping.UrlMappingsHolder]
+        grailsLinkGenerator(cacheUrls ? CachingLinkGenerator : DefaultLinkGenerator, serverURL)
+
+        if (Environment.isDevelopmentMode() || Environment.current.isReloadEnabled()) {
+            "org.grails.internal.URL_MAPPINGS_HOLDER"(UrlMappingsHolderFactoryBean) { bean ->
+                bean.lazyInit = true
+            }
+
+            urlMappingsTargetSource(HotSwappableTargetSource, ref("org.grails.internal.URL_MAPPINGS_HOLDER")) { bean ->
+                bean.lazyInit = true
+            }
+
+            grailsUrlMappingsHolder(ProxyFactoryBean) { bean ->
+                bean.lazyInit = true
+                targetSource = urlMappingsTargetSource
+                proxyInterfaces = [UrlMappings]
+            }
+        } else {
+            grailsUrlMappingsHolder(UrlMappingsHolderFactoryBean) { bean ->
+                bean.lazyInit = true
+            }
         }
     }
 
@@ -142,28 +155,27 @@ class UrlMappingsGrailsPlugin {
     }
 
     def onChange = { event ->
-        if (application.isUrlMappingsClass(event.source)) {
-            application.addArtefact(UrlMappingsArtefactHandler.TYPE, event.source)
+        if (!application.isUrlMappingsClass(event.source)) {
+            return
+        }
 
-            ApplicationContext ctx = applicationContext
-            UrlMappingsHolder urlMappingsHolder = createUrlMappingsHolder(application, ctx, manager)
+        application.addArtefact(UrlMappingsArtefactHandler.TYPE, event.source)
 
-            HotSwappableTargetSource ts = ctx.getBean("urlMappingsTargetSource", HotSwappableTargetSource)
-            ts.swap urlMappingsHolder
+        ApplicationContext ctx = applicationContext
+        UrlMappingsHolder urlMappingsHolder = createUrlMappingsHolder(application, ctx, manager)
 
-            LinkGenerator linkGenerator = ctx.getBean("grailsLinkGenerator", LinkGenerator)
-            if (linkGenerator instanceof CachingLinkGenerator) {
-                linkGenerator.clearCache()
-            }
+        HotSwappableTargetSource ts = ctx.getBean("urlMappingsTargetSource", HotSwappableTargetSource)
+        ts.swap urlMappingsHolder
+
+        LinkGenerator linkGenerator = ctx.getBean("grailsLinkGenerator", LinkGenerator)
+        if (linkGenerator instanceof CachingLinkGenerator) {
+            linkGenerator.clearCache()
         }
     }
 
     private UrlMappingsHolder createUrlMappingsHolder(GrailsApplication application, WebApplicationContext applicationContext, GrailsPluginManager pluginManager) {
-        def factory = new UrlMappingsHolderFactoryBean()
-        factory.applicationContext = applicationContext
+        def factory = new UrlMappingsHolderFactoryBean(applicationContext: applicationContext)
         factory.afterPropertiesSet()
-
-        final urlMappingsHolder = factory.getObject()
-        return urlMappingsHolder
+        return factory.getObject()
     }
 }

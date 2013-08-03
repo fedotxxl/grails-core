@@ -69,7 +69,8 @@ createArtifact = { Map args = [:] ->
     propertyName = GrailsNameUtils.getPropertyNameRepresentation(name)
     artifactFile = "${basedir}/${artifactPath}/${pkgPath}${className}${suffix}.groovy"
 
-    if (new File(artifactFile).exists()) {
+    File destination = new File(artifactFile)
+    if (destination.exists()) {
         if (!confirmInput("${type} ${className}${suffix}.groovy already exists. Overwrite?","${name}.${suffix}.overwrite")) {
             return
         }
@@ -82,7 +83,7 @@ createArtifact = { Map args = [:] ->
         // now check for template provided by plugins
         def possibleResources = pluginSettings.pluginDirectories.collect { dir ->
             new FileSystemResource("${dir.path}/src/${templatePath}/${type ?: lastType}.groovy")
-        }   
+        }
         templateFile = possibleResources.find { it.exists() }
         if (!templateFile) {
             // template not found in application, use default template
@@ -100,8 +101,7 @@ createArtifact = { Map args = [:] ->
     }
 
     copyGrailsResource(artifactFile, templateFile)
-    ant.replace(file: artifactFile,
-        token: "@artifact.name@", value: "${className}${suffix}")
+    ant.replace(file: artifactFile, token: "@artifact.name@", value: "${className}${suffix}")
     if (pkg) {
         ant.replace(file: artifactFile, token: "@artifact.package@", value: "package ${pkg}\n\n")
     }
@@ -113,6 +113,16 @@ createArtifact = { Map args = [:] ->
         ant.replace(file: artifactFile, token: "@artifact.superclass@", value: args["superClass"])
     }
     ant.replace(file: artifactFile, token: "@artifact.testclass@", value: "${className}${type}")
+
+    // optional extra ant.replace name/value pairs
+    args.replacements.each { token, value ->
+        ant.replace(file: artifactFile, token: token, value: value)
+    }
+
+    String lineSeparator = System.getProperty('line.separator')
+    StringBuilder fixed = new StringBuilder()
+    destination.text.eachLine { fixed << it << lineSeparator }
+    destination.withWriter { it.write fixed.toString() }
 
     event("CreatedFile", [artifactFile])
     event("CreatedArtefact", [ artifactFile, className])
@@ -128,7 +138,7 @@ createIntegrationTest = { Map args = [:] ->
     def superClass = args["superClass"] ?: "GroovyTestCase"
     createArtifact(
             name: args["name"],
-            suffix: "${args['suffix']}Tests",
+            suffix: "${args['suffix']}Spec",
             type: args.testType ?: args['suffix'],
             path: "test/integration",
             superClass: superClass,
@@ -140,7 +150,7 @@ createUnitTest = { Map args = [:] ->
     def superClass = args["superClass"] ?: "GrailsUnitTestCase"
     createArtifact(
             name: args["name"],
-            suffix: "${args['suffix']}Tests",
+            suffix: "${args['suffix']}Spec",
             type: args.testType ?: args['suffix'],
             path: "test/unit",
             superClass: superClass,

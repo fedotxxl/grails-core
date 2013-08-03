@@ -1,8 +1,19 @@
+/*
+ * Copyright 2011 SpringSource
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package grails.build.logging;
-
-import jline.ConsoleReader;
-import jline.Terminal;
-import jline.WindowsTerminal;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -10,13 +21,16 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
+import jline.ConsoleReader;
+import jline.Terminal;
+import jline.WindowsTerminal;
+
 public final class PatchedJLineWindowsTerminal extends WindowsTerminal {
     private static final int ENABLE_PROCESSED_INPUT = 1;
     private static final int ENABLE_WINDOW_INPUT = 8;
     private final ConsoleReader reader;
 
     public PatchedJLineWindowsTerminal(ConsoleReader reader) {
-        super();
         this.reader = reader;
     }
 
@@ -71,7 +85,7 @@ public final class PatchedJLineWindowsTerminal extends WindowsTerminal {
         });
     }
 
-    private Object invokePrivateMethod(Class clazz, Object o, String methodName, Object[] params) {
+    private Object invokePrivateMethod(Class<?> clazz, Object o, String methodName, Object[] params) {
         final Method methods[] = clazz.getDeclaredMethods();
         for (int i = 0; i < methods.length; ++i) {
             if (methodName.equals(methods[i].getName())) {
@@ -87,5 +101,4 @@ public final class PatchedJLineWindowsTerminal extends WindowsTerminal {
         }
         throw new RuntimeException("Method '" + methodName + "' not found");
     }
-
 }

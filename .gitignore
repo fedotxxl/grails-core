@@ -33,15 +33,17 @@ target
 /eclipse-build
 
 /.idea/
+/grails-aether/bin/
+/grails-async/bin/
 /grails-bootstrap/bin/
 /grails-core/bin/
-/grails-crud/bin/
 /grails-docs/bin/
-/grails-hibernate/bin/
+/grails-databinding/bin/
 /grails-plugin-async/bin/
 /grails-plugin-codecs/bin/
 /grails-plugin-controllers/bin/
 /grails-plugin-converters/bin/
+/grails-plugin-databinding/bin/
 /grails-plugin-datasource/bin/
 /grails-plugin-domain-class/bin/
 /grails-plugin-filters/bin/
@@ -49,7 +51,7 @@ target
 /grails-plugin-i18n/bin/
 /grails-plugin-logging/bin/
 /grails-plugin-mimetypes/bin/
-/grails-plugin-scaffolding/bin/
+/grails-plugin-rest/bin/
 /grails-plugin-services/bin/
 /grails-plugin-servlets/bin/
 /grails-plugin-testing/bin/
@@ -64,9 +66,7 @@ target
 /grails-test-suite-web/bin/
 /grails-test/bin/
 /grails-web/bin/
-/grails-webflow/bin/
 /grails-wrapper/bin/
 /grails-plugin-log4j/bin/
 /grails-plugin-logging/bin/
 /grails-logging/bin/
-

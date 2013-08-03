@@ -15,20 +15,18 @@
  */
 package org.codehaus.groovy.grails.plugins.converters
 
+import grails.converters.JSON
+import grails.converters.XML
+import grails.util.GrailsUtil
+
+import org.codehaus.groovy.grails.plugins.converters.api.ConvertersControllersApi
+import org.codehaus.groovy.grails.web.converters.configuration.ConvertersConfigurationInitializer
+import org.codehaus.groovy.grails.web.converters.configuration.ObjectMarshallerRegisterer
 import org.codehaus.groovy.grails.web.converters.marshaller.json.ValidationErrorsMarshaller as JsonErrorsMarshaller
 import org.codehaus.groovy.grails.web.converters.marshaller.xml.ValidationErrorsMarshaller as XmlErrorsMarshaller
 
-import grails.util.GrailsUtil
-import org.codehaus.groovy.grails.plugins.converters.api.ConvertersControllersApi
-import org.codehaus.groovy.grails.plugins.converters.codecs.JSONCodec
-import org.codehaus.groovy.grails.plugins.converters.codecs.XMLCodec
-import org.codehaus.groovy.grails.web.converters.JSONParsingParameterCreationListener
-import org.codehaus.groovy.grails.web.converters.XMLParsingParameterCreationListener
-import org.codehaus.groovy.grails.web.converters.configuration.ConvertersConfigurationInitializer
-import org.codehaus.groovy.grails.web.converters.configuration.ObjectMarshallerRegisterer
-
- /**
- * A plug-in that allows the obj as XML syntax.
+/**
+ * Allows the "obj as XML" and "obj as JSON" syntax.
  *
  * @author Siegfried Puchbauer
  * @author Graeme Rocher
@@ -45,19 +43,11 @@ class ConvertersGrailsPlugin {
         The grails-converters plugin aims to give you the ability to convert your domain objects, maps and lists to JSON or XML very quickly, to ease development for AJAX based applications. The plugin leverages the the groovy "as" operator and extends the render method in grails controllers to directly send the result to the output stream. It also adds the Grails Codecs mechanism for XML and JSON.
     """
     def documentation = "http://grails.org/Converters+Plugin"
-    def providedArtefacts = [JSONCodec, XMLCodec]
     def observe = ["controllers"]
 
-    def dependsOn = [
-        controllers: GrailsUtil.getGrailsVersion(),
-        domainClass: GrailsUtil.getGrailsVersion()
-    ]
+    def dependsOn = [controllers: version, domainClass: version]
 
     def doWithSpring = {
-        xmlParsingParameterCreationListener(XMLParsingParameterCreationListener)
-
-        jsonParsingParameterCreationListener(JSONParsingParameterCreationListener)
-
         jsonErrorsMarshaller(JsonErrorsMarshaller)
 
         xmlErrorsMarshaller(XmlErrorsMarshaller)
@@ -66,12 +56,12 @@ class ConvertersGrailsPlugin {
 
         errorsXmlMarshallerRegisterer(ObjectMarshallerRegisterer) {
             marshaller = { XmlErrorsMarshaller om -> }
-            converterClass = grails.converters.XML
+            converterClass = XML
         }
 
         errorsJsonMarshallerRegisterer(ObjectMarshallerRegisterer) {
             marshaller = { JsonErrorsMarshaller om -> }
-            converterClass = grails.converters.JSON
+            converterClass = JSON
         }
 
         instanceConvertersControllersApi(ConvertersControllersApi)
@@ -81,7 +71,7 @@ class ConvertersGrailsPlugin {
 
         applicationContext.convertersConfigurationInitializer.initialize(application)
 
-        ConvertersPluginSupport.enhanceApplication(application,applicationContext)
+        ConvertersPluginSupport.enhanceApplication(application, applicationContext)
 
         log.debug "Converters Plugin configured successfully"
     }

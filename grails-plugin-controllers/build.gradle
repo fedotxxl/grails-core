@@ -1,13 +1,17 @@
 dependencies {
     compile "commons-lang:commons-lang:$commonsLangVersion"
+    compile "commons-collections:commons-collections:$commonsCollectionsVersion"
     compile ("commons-beanutils:commons-beanutils:${commonsBeanUtilsVersion}") {
         exclude group: 'commons-logging', module:'commons-logging'
     }
     compile project(":grails-core"),
             project(":grails-web"),
+            project(":grails-async"),
             project(':grails-plugin-converters'),
             project(':grails-plugin-mimetypes'),
             project(':grails-plugin-domain-class'),
             project(':grails-plugin-validation')
+
+    testRuntime "jline:jline:$jlineVersion"
+    testRuntime "org.fusesource.jansi:jansi:$jansiVersion"
 }
-jar.appendix = 'plugin-controllers'

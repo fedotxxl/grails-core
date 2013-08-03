@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +20,11 @@ import groovy.lang.Closure;
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -35,6 +39,8 @@ public class DefaultGrailsTagLibClass extends AbstractInjectableGrailsClass impl
     private Set<String> tags = new HashSet<String>();
     private String namespace = GrailsTagLibClass.DEFAULT_NAMESPACE;
     private Set<String> returnObjectForTagsSet = new HashSet<String>();
+    private Object defaultEncodeAs = null;
+    private Map<String, Object> encodeAsForTags = new HashMap<String, Object>();
 
     /**
      * Default contructor.
@@ -67,6 +73,17 @@ public class DefaultGrailsTagLibClass extends AbstractInjectableGrailsClass impl
                 returnObjectForTagsSet.add(String.valueOf(tagName));
             }
         }
+
+        defaultEncodeAs = getStaticPropertyValue(DEFAULT_ENCODE_AS_FIELD_NAME, Object.class);
+
+        Map encodeAsForTagsMap = getStaticPropertyValue(ENCODE_AS_FOR_TAGS_FIELD_NAME, Map.class);
+        if (encodeAsForTagsMap != null) {
+            for (@SuppressWarnings("unchecked")
+            Iterator<Map.Entry> it = encodeAsForTagsMap.entrySet().iterator(); it.hasNext();) {
+                Map.Entry entry = it.next();
+                encodeAsForTags.put(entry.getKey().toString(), entry.getValue());
+            }
+        }
     }
 
     public boolean hasTag(String tagName) {
@@ -83,5 +100,13 @@ public class DefaultGrailsTagLibClass extends AbstractInjectableGrailsClass impl
 
     public Set<String> getTagNamesThatReturnObject() {
         return returnObjectForTagsSet;
+    }
+
+    public Object getEncodeAsForTag(String tagName) {
+        return encodeAsForTags.get(tagName);
+    }
+
+    public Object getDefaultEncodeAs() {
+        return defaultEncodeAs;
     }
 }

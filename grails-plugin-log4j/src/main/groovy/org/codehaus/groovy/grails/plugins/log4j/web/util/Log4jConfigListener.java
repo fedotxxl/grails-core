@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,16 +38,10 @@ public class Log4jConfigListener implements ServletContextListener {
 
     public void contextInitialized(ServletContextEvent event) {
         try {
-//            Object grailsApplication = GrailsWebUtil.lookupApplication(event.getServletContext());
-
-//            ConfigObject co = grailsApplication != null ? getConfig(grailsApplication) : null;
-//            if (co == null) {
-                // in this case we're running inside a WAR deployed environment
-                // create empty app to provide metadata
-                Object grailsApplication = createGrailsApplication(Thread.currentThread().getContextClassLoader());
-                ConfigObject co = getConfig(grailsApplication);
-                Log4jConfig.initialize(co);
-//            }
+            ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+            Object grailsApplication = createGrailsApplication(contextClassLoader);
+            ConfigObject co = getConfig(grailsApplication);
+            Log4jConfig.initialize(co);
         }
         catch (Throwable e) {
             LogLog.error("Error initializing log4j: " + e.getMessage(), e);

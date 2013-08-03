@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +48,6 @@ import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.FatalBeanException;
-import org.springframework.core.JdkVersion;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
@@ -111,7 +111,7 @@ public class GrailsClassUtils {
      * @return The value of the property or null if none exists
      */
     @SuppressWarnings({ "unchecked", "rawtypes" })
-    public static Object getPropertyValueOfNewInstance(Class clazz, String propertyName, @SuppressWarnings("unused") Class<?> propertyType) {
+    public static Object getPropertyValueOfNewInstance(Class clazz, String propertyName, Class<?> propertyType) {
         // validate
         if (clazz == null || StringUtils.isBlank(propertyName)) {
             return null;
@@ -1073,22 +1073,10 @@ public class GrailsClassUtils {
      *
      * @param type The class to check
      * @return true if it is an enum
+     * @deprecated
      */
     public static boolean isJdk5Enum(Class<?> type) {
-        if (JdkVersion.getMajorJavaVersion() < JdkVersion.JAVA_15) {
-            return false;
-        }
-
-        Method m = BeanUtils.findMethod(type.getClass(),"isEnum");
-        if (m == null) return false;
-
-        try {
-            Object result = m.invoke(type);
-            return result instanceof Boolean && (Boolean)result;
-        }
-        catch (Exception e) {
-            return false;
-        }
+        return type.isEnum();
     }
 
     /**

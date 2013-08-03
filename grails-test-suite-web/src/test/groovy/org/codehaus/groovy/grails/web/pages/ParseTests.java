@@ -1,6 +1,7 @@
 package org.codehaus.groovy.grails.web.pages;
 
 import grails.util.GrailsWebUtil;
+import grails.util.Holders;
 import groovy.util.ConfigObject;
 import groovy.util.ConfigSlurper;
 
@@ -47,7 +48,11 @@ public class ParseTests extends TestCase {
             + "}\n"
             + "public static final String CONTENT_TYPE = 'text/html;charset=UTF-8'\n"
             + "public static final long LAST_MODIFIED = 0L\n"
-            + "public static final String DEFAULT_CODEC = null\n" + "}\n";
+            + "public static final String EXPRESSION_CODEC = 'HTML'\n"
+            + "public static final String STATIC_CODEC = 'none'\n"
+            + "public static final String OUT_CODEC = 'none'\n"
+            + "public static final String TAGLIB_CODEC = 'none'\n" +
+            "}\n";
 
     protected String makeImports() {
         StringBuilder result = new StringBuilder();
@@ -57,7 +62,6 @@ public class ParseTests extends TestCase {
         return result.toString();
     }
 
-
     public void testParse() throws Exception {
         ParsedResult result = parseCode("myTest1", "<div>hi</div>");
         String expected = makeImports() +
@@ -66,7 +70,7 @@ public class ParseTests extends TestCase {
             "public String getGroovyPageFileName() { \"myTest1\" }\n" +
             "public Object run() {\n" +
             "Writer out = getOut()\n" +
-            "Writer codecOut = getCodecOut()\n"+
+            "Writer expressionOut = getExpressionOut()\n"+
             "registerSitemeshPreprocessMode()\n" +
             "printHtmlPart(0)\n" +
             "}\n" + GSP_FOOTER;
@@ -82,7 +86,7 @@ public class ParseTests extends TestCase {
             "public String getGroovyPageFileName() { \"myTest2\" }\n" +
             "public Object run() {\n" +
             "Writer out = getOut()\n" +
-            "Writer codecOut = getCodecOut()\n"+
+            "Writer expressionOut = getExpressionOut()\n"+
             "registerSitemeshPreprocessMode()\n" +
 
             "invokeTag('message','g',1,['code':evaluate('\"testing [\"', 1, it) { return \"testing [\" }],-1)\n" +
@@ -125,7 +129,7 @@ public class ParseTests extends TestCase {
             "public String getGroovyPageFileName() { \"myTest4\" }\n" +
             "public Object run() {\n" +
             "Writer out = getOut()\n" +
-            "Writer codecOut = getCodecOut()\n"+
+            "Writer expressionOut = getExpressionOut()\n"+
             "registerSitemeshPreprocessMode()\n" +
             "printHtmlPart(0)\n" +
             "}\n" + GSP_FOOTER;
@@ -139,12 +143,12 @@ public class ParseTests extends TestCase {
 
         DefaultGrailsApplication grailsApplication = new DefaultGrailsApplication();
         grailsApplication.setConfig(config);
+        Holders.setConfig(config);
         appCtx.registerMockBean(GrailsApplication.APPLICATION_ID, grailsApplication);
         appCtx.getServletContext().setAttribute(GrailsApplicationAttributes.APPLICATION_CONTEXT, appCtx);
         appCtx.getServletContext().setAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE, appCtx);
         return GrailsWebUtil.bindMockWebRequest(appCtx);
     }
-
 
     public void testParseWithLocalEncoding() throws IOException {
         String src = "This is just plain ASCII to make sure test works on all platforms";
@@ -160,7 +164,7 @@ public class ParseTests extends TestCase {
             "public String getGroovyPageFileName() { \"myTest5\" }\n" +
             "public Object run() {\n" +
             "Writer out = getOut()\n" +
-            "Writer codecOut = getCodecOut()\n"+
+            "Writer expressionOut = getExpressionOut()\n"+
             "registerSitemeshPreprocessMode()\n" +
             "printHtmlPart(0)\n" +
             "}\n" + GSP_FOOTER;
@@ -191,7 +195,7 @@ public class ParseTests extends TestCase {
         }
 
         InputStream gspIn = new ByteArrayInputStream(gsp.getBytes(enc.toString()));
-        GroovyPageParser parse = new GroovyPageParser(uri, uri, uri, gspIn, enc.toString());
+        GroovyPageParser parse = new GroovyPageParser(uri, uri, uri, gspIn, enc.toString(), "HTML");
 
         InputStream in = parse.parse();
         ParsedResult result = new ParsedResult();
@@ -217,10 +221,10 @@ public class ParseTests extends TestCase {
             "public String getGroovyPageFileName() { \"myTest7\" }\n" +
             "public Object run() {\n" +
             "Writer out = getOut()\n" +
-            "Writer codecOut = getCodecOut()\n"+
+            "Writer expressionOut = getExpressionOut()\n"+
             "registerSitemeshPreprocessMode()\n" +
             "printHtmlPart(0)\n" +
-            GroovyPage.CODEC_OUT_STATEMENT + ".print(evaluate('uri', 3, it) { return uri })\n" +
+            GroovyPage.EXPRESSION_OUT_STATEMENT + ".print(evaluate('uri', 3, it) { return uri })\n" +
             "printHtmlPart(1)\n" +
             "}\n" + GSP_FOOTER;
 
@@ -245,7 +249,7 @@ public class ParseTests extends TestCase {
             "public String getGroovyPageFileName() { \"GRAILS5598\" }\n" +
             "public Object run() {\n" +
             "Writer out = getOut()\n" +
-            "Writer codecOut = getCodecOut()\n"+
+            "Writer expressionOut = getExpressionOut()\n"+
             "registerSitemeshPreprocessMode()\n" +
             "createClosureForHtmlPart(0, 1)\n" +
             "invokeTag('captureBody','sitemesh',1,['class':evaluate('\"${page.name} ${page.group.name.toLowerCase()}\"', 1, it) { return \"${page.name} ${page.group.name.toLowerCase()}\" }],1)\n" +
@@ -262,7 +266,7 @@ public class ParseTests extends TestCase {
             "public String getGroovyPageFileName() { \"SITEMESH_PREPROCESS_TEST\" }\n" +
             "public Object run() {\n" +
             "Writer out = getOut()\n" +
-            "Writer codecOut = getCodecOut()\n"+
+            "Writer expressionOut = getExpressionOut()\n"+
             "printHtmlPart(0)\n" +
             "}\n" + GSP_FOOTER;
         assertEquals(trimAndRemoveCR(expected), trimAndRemoveCR(result.generatedGsp));
@@ -277,7 +281,7 @@ public class ParseTests extends TestCase {
             "public String getGroovyPageFileName() { \"GRAILS5605\" }\n" +
             "public Object run() {\n" +
             "Writer out = getOut()\n" +
-            "Writer codecOut = getCodecOut()\n"+
+            "Writer expressionOut = getExpressionOut()\n"+
             "registerSitemeshPreprocessMode()\n" +
             "printHtmlPart(0)\n" +
             "createTagBody(1, {->\n" +

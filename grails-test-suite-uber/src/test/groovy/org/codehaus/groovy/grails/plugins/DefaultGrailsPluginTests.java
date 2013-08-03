@@ -21,6 +21,8 @@ import org.codehaus.groovy.grails.commons.test.AbstractGrailsMockTests;
 import org.codehaus.groovy.grails.plugins.exceptions.PluginException;
 import org.springframework.context.ApplicationContext;
 
+import java.io.File;
+
 /**
  * Test for the DefaultGrailsPlugin class
  *
@@ -115,7 +117,6 @@ public class DefaultGrailsPluginTests extends AbstractGrailsMockTests {
         RuntimeSpringConfiguration springConfig = new DefaultRuntimeSpringConfiguration();
         versionPlugin.doWithRuntimeConfiguration(springConfig);
 
-        @SuppressWarnings("hiding")
         ApplicationContext ctx = springConfig.getApplicationContext();
 
         assertTrue(ctx.containsBean("classEditor"));
@@ -129,7 +130,6 @@ public class DefaultGrailsPluginTests extends AbstractGrailsMockTests {
         RuntimeSpringConfiguration springConfig = new DefaultRuntimeSpringConfiguration();
         versionPlugin.doWithRuntimeConfiguration(springConfig);
 
-        @SuppressWarnings("hiding")
         ApplicationContext ctx = springConfig.getApplicationContext();
 
         assertTrue(ctx.containsBean("classEditor"));
@@ -155,8 +155,8 @@ public class DefaultGrailsPluginTests extends AbstractGrailsMockTests {
 
     public void testWatchedResources() {
         GrailsPlugin versionPlugin = new DefaultGrailsPlugin(versioned, ga);
-        assertEquals(versionPlugin.getWatchedResourcePatterns().get(0).getDirectory().getPath(), "./grails-app/taglib");
-        assertEquals(versionPlugin.getWatchedResourcePatterns().get(1).getDirectory().getPath(), "./grails-app/controller");
-        assertEquals(versionPlugin.getWatchedResourcePatterns().get(2).getDirectory().getPath(), "/absolutePath");
+        assertEquals(versionPlugin.getWatchedResourcePatterns().get(0).getDirectory().getPath(), "./grails-app/taglib".replace("/", File.separator));
+        assertEquals(versionPlugin.getWatchedResourcePatterns().get(1).getDirectory().getPath(), "./grails-app/controller".replace("/", File.separator));
+        assertEquals(versionPlugin.getWatchedResourcePatterns().get(2).getDirectory().getPath(), "/absolutePath".replace("/", File.separator));
     }
 }

@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +30,6 @@ import org.codehaus.groovy.tools.RootLoader;
  */
 public class GrailsRootLoader extends RootLoader {
 
-
     public GrailsRootLoader(URL[] urls, ClassLoader parent) {
         super(urls, parent);
     }
@@ -41,16 +41,14 @@ public class GrailsRootLoader extends RootLoader {
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         try {
-            if(name.startsWith("java.") || name.startsWith("javax.xml.") || name.startsWith("org.w3c.dom.") || name.startsWith("org.xml.")) {
+            if (name.startsWith("java.") || name.startsWith("javax.xml.") || name.startsWith("org.w3c.dom.") || name.startsWith("org.xml.")) {
                 try {
                     return getParent().loadClass(name);
                 } catch (ClassNotFoundException e) {
                     return super.loadClass(name, resolve);
                 }
             }
-            else {
-                return super.loadClass(name, resolve);
-            }
+            return super.loadClass(name, resolve);
         }
         catch (LinkageError e) {
             return getParent().loadClass(name);

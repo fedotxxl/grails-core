@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.codehaus.groovy.grails.support.proxy.DefaultProxyHandler;
 import org.codehaus.groovy.grails.support.proxy.ProxyHandler;
 import org.codehaus.groovy.grails.web.converters.Converter;
-import org.codehaus.groovy.grails.web.converters.marshaller.ClosureOjectMarshaller;
+import org.codehaus.groovy.grails.web.converters.marshaller.ClosureObjectMarshaller;
 import org.codehaus.groovy.grails.web.converters.marshaller.ObjectMarshaller;
 
 /**
@@ -48,6 +48,7 @@ public class DefaultConverterConfiguration<C extends Converter> implements Conve
     private final SortedSet<Entry> objectMarshallers = new TreeSet<Entry>();
     private Converter.CircularReferenceBehaviour circularReferenceBehaviour;
     private ProxyHandler proxyHandler;
+    private boolean cacheObjectMarshallerByClass = true;
 
     public String getEncoding() {
         return encoding != null ? encoding : (delegate != null ? delegate.getEncoding() : null);
@@ -132,11 +133,11 @@ public class DefaultConverterConfiguration<C extends Converter> implements Conve
     }
 
     public void registerObjectMarshaller(Class<?> c, int priority, Closure callable) {
-        registerObjectMarshaller(new ClosureOjectMarshaller<C>(c, callable), priority);
+        registerObjectMarshaller(new ClosureObjectMarshaller<C>(c, callable), priority);
     }
 
     public void registerObjectMarshaller(Class<?> c, Closure callable) {
-        registerObjectMarshaller(new ClosureOjectMarshaller<C>(c, callable));
+        registerObjectMarshaller(new ClosureObjectMarshaller<C>(c, callable));
     }
 
     public ObjectMarshaller<C> getMarshaller(Object o) {
@@ -166,5 +167,13 @@ public class DefaultConverterConfiguration<C extends Converter> implements Conve
 
     public ProxyHandler getProxyHandler() {
         return proxyHandler;
+    }
+
+    public boolean isCacheObjectMarshallerByClass() {
+        return cacheObjectMarshallerByClass;
+    }
+
+    public void setCacheObjectMarshallerByClass(boolean cacheObjectMarshallerByClass) {
+        this.cacheObjectMarshallerByClass = cacheObjectMarshallerByClass;
     }
 }

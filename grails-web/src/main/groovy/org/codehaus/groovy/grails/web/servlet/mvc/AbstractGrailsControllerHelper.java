@@ -15,13 +15,14 @@
  */
 package org.codehaus.groovy.grails.web.servlet.mvc;
 
-import grails.util.GrailsWebUtil;
+import grails.util.Environment;
 import groovy.lang.Closure;
 import groovy.lang.GroovyObject;
 import groovy.util.Proxy;
 
 import java.io.IOException;
 import java.security.AccessControlException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -74,6 +75,8 @@ public abstract class AbstractGrailsControllerHelper implements ApplicationConte
     private static final String PROPERTY_CHAIN_MODEL = "chainModel";
     private static final String FORWARD_IN_PROGRESS = "org.codehaus.groovy.grails.FORWARD_IN_PROGRESS";
     private static final String FORWARD_CALLED = "org.codehaus.groovy.grails.FORWARD_CALLED";
+    private Collection<ActionResultTransformer> actionResultTransformers = Collections.emptyList();
+    protected boolean developmentMode = Environment.isDevelopmentMode();
 
     public ServletContext getServletContext() {
         return servletContext;
@@ -150,7 +153,7 @@ public abstract class AbstractGrailsControllerHelper implements ApplicationConte
         }
 
         if (controllerClass == null) {
-        	controllerClass = getControllerClassByURI(uri);
+            controllerClass = getControllerClassByURI(uri);
         }
 
         if (controllerClass == null) {
@@ -229,6 +232,9 @@ public abstract class AbstractGrailsControllerHelper implements ApplicationConte
             Object returnValue = null;
             try {
                 returnValue = handleAction(controller, action, request, response, params);
+                for (ActionResultTransformer actionResultTransformer : actionResultTransformers) {
+                    returnValue = actionResultTransformer.transformActionResult(webRequest,viewName,returnValue);
+                }
             }
             catch (Throwable t) {
                 String pluginName = GrailsPluginUtils.getPluginName(controller.getClass());
@@ -265,7 +271,7 @@ public abstract class AbstractGrailsControllerHelper implements ApplicationConte
                 }
             }
 
-            if (request.getAttribute(FORWARD_CALLED) == null) {
+            if (request.getAttribute(FORWARD_CALLED) == null && request.getAttribute(GrailsApplicationAttributes.ASYNC_STARTED) == null) {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("Action [" + actionName + "] executed with result [" + returnValue + "] and view name [" + viewName + "]");
                 }
@@ -305,26 +311,29 @@ public abstract class AbstractGrailsControllerHelper implements ApplicationConte
     @SuppressWarnings("rawtypes")
     private boolean invokeAfterInterceptor(GrailsControllerClass controllerClass,
             GroovyObject controller, String actionName, ModelAndView mv) {
+        if (!controllerClass.isInterceptedAfter(controller,actionName)) {
+            return true;
+        }
+
         // Step 9: Check if there is after interceptor
         Object interceptorResult = null;
-        if (controllerClass.isInterceptedAfter(controller,actionName)) {
-            Closure afterInterceptor = controllerClass.getAfterInterceptor(controller);
-            Map model = new HashMap();
-            if (mv != null) {
-                model = mv.getModel() == null ? new HashMap() : mv.getModel();
-            }
-            switch (afterInterceptor.getMaximumNumberOfParameters()) {
-                case 1:
-                    interceptorResult = afterInterceptor.call(new Object[]{ model });
-                    break;
-                case 2:
-                    interceptorResult = afterInterceptor.call(new Object[]{ model, mv });
-                    break;
-                default:
-                    throw new ControllerExecutionException("AfterInterceptor closure must accept one or two parameters");
-            }
+        Closure afterInterceptor = controllerClass.getAfterInterceptor(controller);
+        Map model = new HashMap();
+        if (mv != null) {
+            model = mv.getModel() == null ? new HashMap() : mv.getModel();
         }
-        return !(interceptorResult != null && interceptorResult instanceof Boolean) || (Boolean)interceptorResult;
+        switch (afterInterceptor.getMaximumNumberOfParameters()) {
+            case 1:
+                interceptorResult = afterInterceptor.call(new Object[]{ model });
+                break;
+            case 2:
+                interceptorResult = afterInterceptor.call(new Object[]{ model, mv });
+                break;
+            default:
+                throw new ControllerExecutionException("AfterInterceptor closure must accept one or two parameters");
+        }
+
+        return interceptorResult instanceof Boolean ? (Boolean)interceptorResult : true;
     }
 
     public GrailsApplicationAttributes getGrailsAttributes() {
@@ -339,7 +348,7 @@ public abstract class AbstractGrailsControllerHelper implements ApplicationConte
 
     @SuppressWarnings("rawtypes")
     public Object handleAction(GroovyObject controller, Object action, HttpServletRequest request,
-            @SuppressWarnings("unused") HttpServletResponse response, Map params) {
+            HttpServletResponse response, Map params) {
         GrailsParameterMap paramsMap = (GrailsParameterMap)controller.getProperty("params");
         // if there are additional params add them to the params dynamic property
         if (params != null && !params.isEmpty()) {
@@ -375,15 +384,7 @@ public abstract class AbstractGrailsControllerHelper implements ApplicationConte
             if (viewNameBlank) {
                 return null;
             }
-
-            Map model;
-            if (!chainModel.isEmpty()) {
-                model = new CompositeMap(chainModel, new GrailsControllerBeanMap(controller));
-            }
-            else {
-                model = new GrailsControllerBeanMap(controller);
-            }
-            return new ModelAndView(viewName, model);
+            return new ModelAndView(viewName, chainModel);
         }
 
         if (returnValue instanceof Map) {
@@ -421,14 +422,7 @@ public abstract class AbstractGrailsControllerHelper implements ApplicationConte
             return modelAndView;
         }
 
-        Map model;
-        if (!chainModel.isEmpty()) {
-            model = new CompositeMap(chainModel, new GrailsControllerBeanMap(controller));
-        }
-        else {
-            model = new GrailsControllerBeanMap(controller);
-        }
-        return new ModelAndView(viewName, model);
+        return new ModelAndView(viewName, chainModel);
     }
 
     @SuppressWarnings("rawtypes")
@@ -446,6 +440,7 @@ public abstract class AbstractGrailsControllerHelper implements ApplicationConte
 
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
         this.applicationContext = applicationContext;
+        this.actionResultTransformers = applicationContext.getBeansOfType(ActionResultTransformer.class).values();
     }
 
     public void setServletContext(ServletContext servletContext) {

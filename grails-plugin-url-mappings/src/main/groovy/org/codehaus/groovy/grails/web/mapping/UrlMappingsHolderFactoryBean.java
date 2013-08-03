@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,20 +45,20 @@ import org.springframework.web.context.WebApplicationContext;
  * @since 0.5
  */
 @SuppressWarnings({ "unchecked", "rawtypes" })
-public class UrlMappingsHolderFactoryBean implements FactoryBean<UrlMappingsHolder>, InitializingBean, ApplicationContextAware, GrailsApplicationAware, PluginManagerAware {
+public class UrlMappingsHolderFactoryBean implements FactoryBean<UrlMappings>, InitializingBean, ApplicationContextAware, GrailsApplicationAware, PluginManagerAware {
     private static final String URL_MAPPING_CACHE_MAX_SIZE = "grails.urlmapping.cache.maxsize";
     private static final String URL_CREATOR_CACHE_MAX_SIZE = "grails.urlcreator.cache.maxsize";
     private GrailsApplication grailsApplication;
-    private UrlMappingsHolder urlMappingsHolder;
+    private UrlMappings urlMappingsHolder;
     private GrailsPluginManager pluginManager;
     private ApplicationContext applicationContext;
 
-    public UrlMappingsHolder getObject() throws Exception {
+    public UrlMappings getObject() throws Exception {
         return urlMappingsHolder;
     }
 
-    public Class<UrlMappingsHolder> getObjectType() {
-        return UrlMappingsHolder.class;
+    public Class<UrlMappings> getObjectType() {
+        return UrlMappings.class;
     }
 
     public boolean isSingleton() {
@@ -73,9 +74,8 @@ public class UrlMappingsHolderFactoryBean implements FactoryBean<UrlMappingsHold
 
         GrailsClass[] mappings = grailsApplication.getArtefacts(UrlMappingsArtefactHandler.TYPE);
 
-        final DefaultUrlMappingEvaluator defaultUrlMappingEvaluator = new DefaultUrlMappingEvaluator((WebApplicationContext) applicationContext);
-        defaultUrlMappingEvaluator.setPluginManager(pluginManager);
-        UrlMappingEvaluator mappingEvaluator = defaultUrlMappingEvaluator;
+        final DefaultUrlMappingEvaluator mappingEvaluator = new DefaultUrlMappingEvaluator((WebApplicationContext) applicationContext);
+        mappingEvaluator.setPluginManager(pluginManager);
 
         if (mappings.length == 0) {
             urlMappings.addAll(mappingEvaluator.evaluateMappings(DefaultUrlMappings.getMappings()));
@@ -84,7 +84,7 @@ public class UrlMappingsHolderFactoryBean implements FactoryBean<UrlMappingsHold
             for (GrailsClass mapping : mappings) {
                 GrailsUrlMappingsClass mappingClass = (GrailsUrlMappingsClass) mapping;
                 List grailsClassMappings;
-                if (Script.class.isAssignableFrom(mappingClass.getClass())) {
+                if (Script.class.isAssignableFrom(mappingClass.getClazz())) {
                     grailsClassMappings = mappingEvaluator.evaluateMappings(mappingClass.getClazz());
                 }
                 else {
@@ -97,7 +97,6 @@ public class UrlMappingsHolderFactoryBean implements FactoryBean<UrlMappingsHold
                 }
             }
         }
-
 
         DefaultUrlMappingsHolder defaultUrlMappingsHolder = new DefaultUrlMappingsHolder(urlMappings, excludePatterns, true);
 
@@ -131,7 +130,7 @@ public class UrlMappingsHolderFactoryBean implements FactoryBean<UrlMappingsHold
         this.grailsApplication = grailsApplication;
     }
 
-    public void setServletContext(@SuppressWarnings("unused") ServletContext servletContext) {
+    public void setServletContext(ServletContext servletContext) {
         // not used
     }
 

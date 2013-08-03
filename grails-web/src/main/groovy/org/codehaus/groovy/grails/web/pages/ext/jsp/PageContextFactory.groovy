@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +18,10 @@ package org.codehaus.groovy.grails.web.pages.ext.jsp
 import javax.servlet.ServletContext
 import javax.servlet.jsp.PageContext as PC
 
-import org.codehaus.groovy.grails.web.pages.GroovyPageBinding;
+import org.codehaus.groovy.grails.web.pages.GroovyPageBinding
 import org.codehaus.groovy.grails.web.pages.GroovyPagesServlet
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes as GAA
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
-
 import org.springframework.web.context.request.RequestContextHolder
 
 /**

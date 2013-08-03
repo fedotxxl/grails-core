@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +16,7 @@
 package org.codehaus.groovy.grails.web.mapping;
 
 import grails.util.GrailsNameUtils;
+import grails.web.CamelCaseUrlConverter;
 import grails.web.UrlConverter;
 
 import java.util.Collections;
@@ -49,6 +51,8 @@ public class DefaultUrlMappingInfo extends AbstractUrlMappingInfo {
     private Object controllerName;
     private Object actionName;
     private Object pluginName;
+    private Object namespace;
+    private Object redirectInfo;
     private Object id;
     private static final String ID_PARAM = "id";
     private UrlMappingData urlData;
@@ -58,30 +62,63 @@ public class DefaultUrlMappingInfo extends AbstractUrlMappingInfo {
     private boolean parsingRequest;
     private Object uri;
     private UrlConverter urlConverter;
+    private String httpMethod;
+    private String version;
 
     @SuppressWarnings({"unchecked","rawtypes"})
     private DefaultUrlMappingInfo(Map params, UrlMappingData urlData, ServletContext servletContext) {
-        this.params = Collections.unmodifiableMap(params);
-        id = params.get(ID_PARAM);
+        setParams(params);
+        id = getParams().get(ID_PARAM);
         this.urlData = urlData;
         this.servletContext = servletContext;
+        ApplicationContext applicationContext = null;
+        if(servletContext != null) {
+
+            applicationContext = WebUtils.findApplicationContext(servletContext);
+        }
+        if(applicationContext != null && applicationContext.containsBean(UrlConverter.BEAN_NAME)) {
+            urlConverter = applicationContext.getBean(UrlConverter.BEAN_NAME, UrlConverter.class);
+        }
+        else {
+            urlConverter = new CamelCaseUrlConverter();
+        }
+    }
+    private DefaultUrlMappingInfo(String httpMethod,Map params, UrlMappingData urlData, ServletContext servletContext) {
+        setParams(params);
+        id = getParams().get(ID_PARAM);
+        this.urlData = urlData;
+        this.servletContext = servletContext;
+        this.httpMethod = httpMethod;
         GrailsApplication grailsApplication = WebUtils.lookupApplication(servletContext);
         ApplicationContext mainContext = grailsApplication.getMainContext();
         urlConverter = mainContext.getBean(UrlConverter.BEAN_NAME, UrlConverter.class);
     }
 
     @SuppressWarnings("rawtypes")
-    public DefaultUrlMappingInfo(Object controllerName, Object actionName, Object pluginName, Object viewName, Map params,
+    public DefaultUrlMappingInfo(Object redirectInfo, Object controllerName, Object actionName, Object namespace, Object pluginName, Object viewName, Map params,
             UrlMappingData urlData, ServletContext servletContext) {
+        this(redirectInfo, controllerName, actionName, namespace, pluginName, viewName, null,UrlMapping.ANY_VERSION, params, urlData, servletContext);
+    }
+    public DefaultUrlMappingInfo(Object redirectInfo, Object controllerName, Object actionName, Object namespace, Object pluginName, Object viewName, String httpMethod, String version, Map params,
+                                 UrlMappingData urlData, ServletContext servletContext) {
         this(params, urlData, servletContext);
-        Assert.isTrue(controllerName != null || viewName != null, "URL mapping must either provide a controller or view name to map to!");
+        Assert.isTrue(redirectInfo != null || controllerName != null || viewName != null, "URL mapping must either provide redirect information, a controller or a view name to map to!");
         Assert.notNull(params, "Argument [params] cannot be null");
         this.controllerName = controllerName;
         this.actionName = actionName;
         this.pluginName = pluginName;
+        this.namespace = namespace;
+        this.httpMethod = httpMethod;
+        this.version = version;
+        this.redirectInfo = redirectInfo;
         if (actionName == null) {
             this.viewName = viewName;
         }
+    }
+
+    @Override
+    public String getVersion() {
+        return this.version;
     }
 
     @SuppressWarnings("rawtypes")
@@ -96,6 +133,18 @@ public class DefaultUrlMappingInfo extends AbstractUrlMappingInfo {
         this.uri = uri;
         Assert.notNull(uri, "Argument [uri] cannot be null or blank");
     }
+    public DefaultUrlMappingInfo(Object uri,String httpMethod, UrlMappingData data, ServletContext servletContext) {
+        this(Collections.EMPTY_MAP, data, servletContext);
+        this.uri = uri;
+        this.httpMethod = httpMethod;
+        Assert.notNull(uri, "Argument [uri] cannot be null or blank");
+    }
+
+
+    @Override
+    public String getHttpMethod() {
+        return httpMethod;
+    }
 
     @Override
     public String toString() {
@@ -104,7 +153,7 @@ public class DefaultUrlMappingInfo extends AbstractUrlMappingInfo {
 
     @SuppressWarnings("rawtypes")
     public Map getParameters() {
-        return params;
+        return getParams();
     }
 
     public boolean isParsingRequest() {
@@ -114,11 +163,15 @@ public class DefaultUrlMappingInfo extends AbstractUrlMappingInfo {
     public void setParsingRequest(boolean parsingRequest) {
         this.parsingRequest = parsingRequest;
     }
-    
+
     public String getPluginName() {
-        return pluginName != null ? pluginName.toString() : null;
+        return pluginName == null ? null : pluginName.toString();
     }
 
+    public String getNamespace() {
+        String name = evaluateNameForValue(namespace);
+        return urlConverter.toUrlElement(name);
+    }
     public String getControllerName() {
         String name = evaluateNameForValue(controllerName);
         if (name == null && getViewName() == null) {
@@ -131,7 +184,7 @@ public class DefaultUrlMappingInfo extends AbstractUrlMappingInfo {
     public String getActionName() {
         GrailsWebRequest webRequest = (GrailsWebRequest) RequestContextHolder.getRequestAttributes();
 
-        String name = webRequest != null ? checkDispatchAction(webRequest.getCurrentRequest()) : null;
+        String name = webRequest == null ? null : checkDispatchAction(webRequest.getCurrentRequest());
         if (name == null) {
             name = evaluateNameForValue(actionName, webRequest);
         }
@@ -147,7 +200,8 @@ public class DefaultUrlMappingInfo extends AbstractUrlMappingInfo {
     }
 
     private String checkDispatchAction(HttpServletRequest request) {
-        if (request.getAttribute(GrailsExceptionResolver.EXCEPTION_ATTRIBUTE)!= null) return null;
+        if (request.getAttribute(GrailsExceptionResolver.EXCEPTION_ATTRIBUTE) != null) return null;
+
         String dispatchActionName = null;
         Enumeration<String> paramNames = tryMultipartParams(request, request.getParameterNames());
 
@@ -207,5 +261,10 @@ public class DefaultUrlMappingInfo extends AbstractUrlMappingInfo {
 
     public String getURI() {
         return evaluateNameForValue(uri);
+    }
+    
+    @Override
+    public Object getRedirectInfo() {
+        return redirectInfo;
     }
 }

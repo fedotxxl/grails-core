@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -322,6 +323,8 @@ public class GrailsDomainConfigurationUtil {
                 !name.equals(GrailsDomainClassProperty.CLASS) &&
                 !name.equals(GrailsDomainClassProperty.TRANSIENT) &&
                 !name.equals(GrailsDomainClassProperty.ATTACHED) &&
+                !name.equals(GrailsDomainClassProperty.DIRTY) &&
+                !name.equals(GrailsDomainClassProperty.DIRTY_PROPERTY_NAMES) &&
                 !name.equals(GrailsDomainClassProperty.RELATES_TO_MANY) &&
                 !name.equals(GrailsDomainClassProperty.HAS_MANY) &&
                 !name.equals(GrailsDomainClassProperty.EVANESCENT) &&
@@ -330,10 +333,7 @@ public class GrailsDomainConfigurationUtil {
                 !name.equals(GrailsDomainClassProperty.MAPPED_BY) &&
                 !name.equals(GrailsDomainClassProperty.BELONGS_TO) &&
                 !name.equals(PROPERTIES_PROPERTY);
-
-
     }
-
 
     /**
      * Evaluates the constraints closure to build the list of constraints

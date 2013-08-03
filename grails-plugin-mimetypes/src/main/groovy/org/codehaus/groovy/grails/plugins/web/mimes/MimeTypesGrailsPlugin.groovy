@@ -16,8 +16,12 @@
 package org.codehaus.groovy.grails.plugins.web.mimes
 
 import grails.util.GrailsUtil
+import org.codehaus.groovy.grails.web.mime.DefaultMimeTypeResolver
+import org.codehaus.groovy.grails.web.mime.MimeTypeResolver
+
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
+
 import org.codehaus.groovy.grails.commons.metaclass.MetaClassEnhancer
 import org.codehaus.groovy.grails.plugins.web.api.RequestMimeTypesApi
 import org.codehaus.groovy.grails.plugins.web.api.ResponseMimeTypesApi
@@ -46,15 +50,16 @@ class MimeTypesGrailsPlugin {
         grailsMimeUtility(DefaultMimeUtility, mimeTypesBeanRef)
         requestMimeTypesApi(RequestMimeTypesApi, grailsAppBeanRef, mimeTypesBeanRef)
         responseMimeTypesApi(ResponseMimeTypesApi, grailsAppBeanRef, mimeTypesBeanRef)
+        "${MimeTypeResolver.BEAN_NAME}"(DefaultMimeTypeResolver)
     }
 
     def doWithDynamicMethods = { ApplicationContext ctx ->
         MetaClassEnhancer requestEnhancer = new MetaClassEnhancer()
-        requestEnhancer.addApi ctx.getBean("requestMimeTypesApi")
+        requestEnhancer.addApi ctx.requestMimeTypesApi
         requestEnhancer.enhance HttpServletRequest.metaClass
 
         MetaClassEnhancer responseEnhancer = new MetaClassEnhancer()
-        responseEnhancer.addApi ctx.getBean("responseMimeTypesApi")
+        responseEnhancer.addApi ctx.responseMimeTypesApi
         responseEnhancer.enhance HttpServletResponse.metaClass
     }
 }

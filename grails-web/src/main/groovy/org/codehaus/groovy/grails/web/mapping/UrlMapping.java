@@ -34,8 +34,60 @@ import org.codehaus.groovy.grails.validation.ConstrainedProperty;
 @SuppressWarnings("rawtypes")
 public interface UrlMapping extends Comparable, UrlCreator {
 
+    String WILDCARD = "*";
+    String CAPTURED_WILDCARD = "(*)";
+    String OPTIONAL_EXTENSION_WILDCARD = "(.(*))";
+    String SLASH = "/";
+    char QUESTION_MARK = '?';
+    char AMPERSAND = '&';
+    String DOUBLE_WILDCARD = "**";
+    String CAPTURED_DOUBLE_WILDCARD = "(**)";
+
+    /**
+     * The controller this mapping matches
+     */
     String CONTROLLER = "controller";
+    /**
+     * The action this mapping matches
+     */
     String ACTION = "action";
+    /**
+     * The HTTP method this mapping matches
+     */
+    String HTTP_METHOD = "method";
+    
+    /**
+     * Redirect information for this url mapping.
+     */
+    String REDIRECT_INFO = "redirect";
+
+    /**
+     * Constant used to define a Url mapping that matches any HTTP method
+     */
+    String ANY_HTTP_METHOD = "*";
+
+    /**
+     * The version of the URL mapping
+     */
+    String VERSION = "version";
+
+    /**
+     * Constant used to define a Url mapping that matches any HTTP method
+     */
+    String ANY_VERSION = "*";
+
+    /**
+     * The URI of the URL mapping
+     */
+    String URI = "uri";
+    /**
+     * The plugin of the URL Mapping
+     */
+    String PLUGIN = "plugin";
+    /**
+     * The namespace of the URL mapping
+     */
+    String NAMESPACE = "namespace";
 
     /**
      * Matches the given URI and returns an instance of the UrlMappingInfo interface or null
@@ -83,14 +135,36 @@ public interface UrlMapping extends Comparable, UrlCreator {
      * @return The action name as a {@link groovy.lang.Closure} or {@link java.lang.String}
      */
     Object getActionName();
-    
+
+    /**
+     * The name of the plugin this URL mapping relates to, if any
+     *
+     * @return The plugin name
+     */
     Object getPluginName();
+
+    /**
+     * @return the name of the controller namespace
+     */
+    Object getNamespace();
 
     /**
      * Returns the name of the view to map to
      * @return The view name
      */
     Object getViewName();
+
+    /**
+     * The HTTP method this URL mapping applies to. Will be null for all HTTP methods
+     * @return The HTTP method
+     */
+    String getHttpMethod();
+
+
+    /**
+     * @return The version of the URL mapping. Used for versioning of REST services
+     */
+    String getVersion();
 
     /**
      * Sets any parameter values that should be populated into the request
@@ -105,8 +179,17 @@ public interface UrlMapping extends Comparable, UrlCreator {
      */
     void setParseRequest(boolean shouldParse);
 
+    /**
+     * The name of the mapping in case of named URL mapping
+     *
+     * @return The mapping name
+     */
     String getMappingName();
 
+    /**
+     * Sets the name of the URL mapping
+     * @param name The name of the URL mapping
+     */
     void setMappingName(String name);
 
     /**
@@ -125,4 +208,14 @@ public interface UrlMapping extends Comparable, UrlCreator {
      * @return true if the mapping has the variable
      */
     boolean hasRuntimeVariable(String name);
+    
+    /**
+     * The redirect information should be a String or a Map.  If it
+     * is a String that string is the URI to redirect to.  If it is
+     * a Map, that Map may contain any entries supported as arguments
+     * to the dynamic redirect(Map) method on a controller.
+     * 
+     * @return redirect information for this url mapping
+     */
+    Object getRedirectInfo();
 }

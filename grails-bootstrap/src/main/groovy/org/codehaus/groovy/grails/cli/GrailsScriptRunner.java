@@ -38,19 +38,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Pattern;
 
 import org.apache.tools.ant.Project;
 import org.codehaus.gant.GantBinding;
 import org.codehaus.gant.GantMetaClass;
+import org.codehaus.groovy.grails.cli.fork.ForkedGrailsProcess;
 import org.codehaus.groovy.grails.cli.interactive.InteractiveMode;
 import org.codehaus.groovy.grails.cli.parsing.CommandLine;
 import org.codehaus.groovy.grails.cli.parsing.CommandLineParser;
@@ -63,7 +57,6 @@ import org.codehaus.groovy.grails.io.support.PathMatchingResourcePatternResolver
 import org.codehaus.groovy.grails.io.support.Resource;
 import org.codehaus.groovy.grails.plugins.GrailsPluginUtils;
 import org.codehaus.groovy.runtime.DefaultGroovyMethods;
-
 
 /**
  * Handles Grails command line interface for running scripts.
@@ -80,8 +73,7 @@ public class GrailsScriptRunner {
 
     private static PrintStream originalOut;
     @SuppressWarnings("rawtypes")
-    public static final
-    Closure DO_NOTHING_CLOSURE = new Closure(GrailsScriptRunner.class) {
+    public static final Closure DO_NOTHING_CLOSURE = new Closure(GrailsScriptRunner.class) {
         private static final long serialVersionUID = 1L;
         @Override public Object call(Object arguments) { return null; }
         @Override public Object call() { return null; }
@@ -164,6 +156,9 @@ public class GrailsScriptRunner {
             build = new BuildSettings(new File(grailsHome));
             build.setModified(commandLine.hasOption(CommandLine.REFRESH_DEPENDENCIES_ARGUMENT));
             build.setOffline(commandLine.hasOption(CommandLine.OFFLINE_ARGUMENT));
+            if(commandLine.hasOption(CommandLine.DEBUG_FORK)) {
+                System.setProperty(ForkedGrailsProcess.DEBUG_FORK, "true");
+            }
             if (build.getRootLoader() == null) {
                 build.setRootLoader((URLClassLoader) GrailsScriptRunner.class.getClassLoader());
             }
@@ -192,8 +187,6 @@ public class GrailsScriptRunner {
             System.exit(0);
         }
 
-        // If there aren't any arguments, then we don't have a command
-        // to execute, so enter "interactive mode"
         boolean resolveDeps = commandLine.hasOption(CommandLine.REFRESH_DEPENDENCIES_ARGUMENT);
         if (resolveDeps) {
             if (commandLine.hasOption("include-source")) {
@@ -209,11 +202,12 @@ public class GrailsScriptRunner {
             console.error("The 'interactive' script is deprecated; to run in interactive mode just omit the script name");
             script.name = null;
         }
+
         if (script.name == null) {
             String version = System.getProperty("grails.version");
             console.updateStatus("Loading Grails " + (version == null ? build.getGrailsVersion() : version));
 
-            build.loadConfig();
+            loadConfigEnvironment(commandLine, build);
             if (resolveDeps) {
                 ClasspathConfigurer.cleanResolveCache(build);
             }
@@ -229,8 +223,7 @@ public class GrailsScriptRunner {
             console.verbose("Base Directory: " + build.getBaseDir().getPath());
 
             try {
-                int exitCode = scriptRunner.executeCommand(commandLine,
-                        script.name, script.env);
+                int exitCode = scriptRunner.executeCommand(commandLine, script.name, script.env);
                 GrailsConsole.getInstance().flush();
                 System.exit(exitCode);
             }
@@ -244,6 +237,18 @@ public class GrailsScriptRunner {
         }
     }
 
+    private static void loadConfigEnvironment(CommandLine commandLine, BuildSettings build) {
+        String env;
+        if(commandLine.isEnvironmentSet()) {
+            env = commandLine.getEnvironment();
+        }
+        else {
+            env = commandLine.lookupEnvironmentForCommand();
+        }
+        build.setGrailsEnv(env);
+        build.loadConfig(env);
+    }
+
     public static CommandLineParser getCommandLineParser() {
         CommandLineParser parser = new CommandLineParser();
         parser.addOption(CommandLine.REFRESH_DEPENDENCIES_ARGUMENT, "Whether to force a resolve of dependencies (skipping any caching)");
@@ -254,16 +259,17 @@ public class GrailsScriptRunner {
         parser.addOption(CommandLine.NON_INTERACTIVE_ARGUMENT, "Whether to allow the command line to request input");
         parser.addOption(CommandLine.VERSION_ARGUMENT, "Current Grails version");
         parser.addOption(CommandLine.NOANSI_ARGUMENT, "Disables ANSI output");
+        parser.addOption(CommandLine.DEBUG_FORK, "Whether to debug the forked JVM if using forked mode");
         return parser;
     }
 
     private static void exitWithError(String error, Throwable t) {
         GrailsConsole grailsConsole = GrailsConsole.getInstance();
-        if (t != null) {
-            grailsConsole.error(error, t);
+        if (t == null) {
+            grailsConsole.error(error);
         }
         else {
-            grailsConsole.error(error);
+            grailsConsole.error(error, t);
         }
         grailsConsole.flush();
         System.exit(1);
@@ -340,7 +346,6 @@ public class GrailsScriptRunner {
     }
 
     private int executeCommand(CommandLine commandLine, String scriptName, String env) {
-        @SuppressWarnings("hiding")
         GrailsConsole console = getConsole(commandLine);
 
         // Load the BuildSettings file for this project if it exists. Note
@@ -349,7 +354,7 @@ public class GrailsScriptRunner {
             System.setProperty("disable.grails.plugin.transform", "true");
 
             console.updateStatus("Loading Grails " + settings.getGrailsVersion());
-            settings.loadConfig();
+            loadConfigEnvironment(commandLine, settings);
             settings.initializeResourcesDir();
 
             System.setProperty("springloaded.directoriesContainingReloadableCode",
@@ -368,7 +373,6 @@ public class GrailsScriptRunner {
         // settings.setGrailsEnv(env);
         // settings.setDefaultEnv(useDefaultEnv);
 
-
         try {
             BuildSettingsHolder.setSettings(settings);
             return callPluginOrGrailsScript(commandLine, scriptName, env);
@@ -379,7 +383,7 @@ public class GrailsScriptRunner {
     }
 
     private GrailsConsole getConsole(CommandLine commandLine) {
-        @SuppressWarnings("hiding") GrailsConsole console = GrailsConsole.getInstance();
+        GrailsConsole console = GrailsConsole.getInstance();
 
         // Set the console display properties
         console.setAnsiEnabled(!commandLine.hasOption(CommandLine.NOANSI_ARGUMENT));
@@ -727,7 +731,7 @@ public class GrailsScriptRunner {
     }
 
     private String askUserForBestMatch(String scriptName, List<String> topMatches) {
-        @SuppressWarnings("hiding") GrailsConsole console = GrailsConsole.getInstance();
+        GrailsConsole console = GrailsConsole.getInstance();
         console.addStatus("Script '" + scriptName + "' not found, did you mean:");
         int i = 0;
         for (String s : topMatches) {
@@ -838,11 +842,13 @@ public class GrailsScriptRunner {
      * underscore, '_') found in the given directory to the given list.
      */
     private static void addCommandScripts(File dir, List<File> scripts) {
-        if (dir.exists()) {
-            for (File file : dir.listFiles()) {
-                if (scriptFilePattern.matcher(file.getName()).matches()) {
-                    scripts.add(file);
-                }
+        if (!dir.exists()) {
+            return;
+        }
+
+        for (File file : dir.listFiles()) {
+            if (scriptFilePattern.matcher(file.getName()).matches()) {
+                scripts.add(file);
             }
         }
     }

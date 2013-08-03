@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.plugins.web.api
 
 import javax.servlet.http.HttpServletRequest
@@ -58,7 +57,7 @@ class ServletRequestApi {
     /**
      * Return true if the request is a get
      */
-    boolean isGet (HttpServletRequest instance) {
+    boolean isGet(HttpServletRequest instance) {
         instance.method == "GET"
     }
 
@@ -72,11 +71,10 @@ class ServletRequestApi {
     /**
      * enables searching of request attributes with request.find { it.key == 'foo' }
      */
-    def find(HttpServletRequest instance, Closure c) {
-        def request = instance
+    def find(HttpServletRequest request, Closure c) {
         def result = [:]
         for (name in request.attributeNames) {
-            def match = false
+            boolean match = false
             switch (c.parameterTypes.length) {
                 case 0:
                     match = c.call()
@@ -98,11 +96,10 @@ class ServletRequestApi {
     /**
      *  enables searching of for a number of request attributes using request.findAll { it.key.startsWith('foo') }
      */
-    def findAll (HttpServletRequest instance, Closure c) {
-        def request = instance
+    def findAll(HttpServletRequest request, Closure c) {
         def results = [:]
         for (name in request.attributeNames) {
-            def match = false
+            boolean match = false
             switch (c.parameterTypes.length) {
                 case 0:
                     match = c.call()
@@ -121,7 +118,7 @@ class ServletRequestApi {
     /**
      *  enables iteration over request attributes with each method request.each { name, value -> }
      */
-    def each (HttpServletRequest instance, Closure c) {
+    def each(HttpServletRequest instance, Closure c) {
         def request = instance
         for (name in request.attributeNames) {
             switch (c.parameterTypes.length) {

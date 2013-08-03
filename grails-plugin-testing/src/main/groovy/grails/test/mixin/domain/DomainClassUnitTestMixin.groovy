@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package grails.test.mixin.domain
 
 import grails.artefact.Enhanced
 import grails.test.mixin.support.GrailsUnitTestMixin
+import groovy.transform.CompileStatic
 import org.codehaus.groovy.grails.commons.DomainClassArtefactHandler
 import org.codehaus.groovy.grails.commons.GrailsClassUtils
 import org.codehaus.groovy.grails.commons.GrailsDomainClass
@@ -83,18 +83,24 @@ class DomainClassUnitTestMixin extends GrailsUnitTestMixin {
             initGrailsApplication()
         }
 
-        simpleDatastore = new SimpleMapDatastore(applicationContext)
-        simpleDatastore.mappingContext.setCanInitializeEntities(false)
-        transactionManager = new DatastoreTransactionManager(datastore: simpleDatastore)
-        applicationContext.addApplicationListener new DomainEventListener(simpleDatastore)
-        applicationContext.addApplicationListener new AutoTimestampEventListener(simpleDatastore)
-        ConstrainedProperty.registerNewConstraint("unique", new UniqueConstraintFactory(simpleDatastore))
 
         defineBeans {
+            grailsDatastore(SimpleMapDatastore, applicationContext)
+            transactionManager(DatastoreTransactionManager) {
+                datastore = ref("grailsDatastore")
+            }
             "${ConstraintsEvaluator.BEAN_NAME}"(ConstraintsEvaluatorFactoryBean) {
                 defaultConstraints = DomainClassGrailsPlugin.getDefaultConstraints(grailsApplication.config)
             }
         }
+
+        simpleDatastore = applicationContext.getBean(SimpleMapDatastore)
+        simpleDatastore.mappingContext.setCanInitializeEntities(false)
+        transactionManager = applicationContext.getBean(PlatformTransactionManager)
+        applicationContext.addApplicationListener new DomainEventListener(simpleDatastore)
+        applicationContext.addApplicationListener new AutoTimestampEventListener(simpleDatastore)
+        ConstrainedProperty.registerNewConstraint("unique", new UniqueConstraintFactory(simpleDatastore))
+
     }
 
     @AfterClass
@@ -117,24 +123,33 @@ class DomainClassUnitTestMixin extends GrailsUnitTestMixin {
         simpleDatastore.clearData()
     }
 
-    def mockDomains(Class... domainsClassToMock) {
+    @CompileStatic
+    def mockDomains(Class... domainClassesToMock) {
         initialMockDomainSetup()
-        Collection<PersistentEntity> entities = simpleDatastore.mappingContext.addPersistentEntities(domainsClassToMock)
-        for(PersistentEntity entity in entities) {
-            final c = entity.javaClass
-            GrailsDomainClass domain = registerGrailsDomainClass(c)
+        Collection<PersistentEntity> entities = simpleDatastore.mappingContext.addPersistentEntities(domainClassesToMock)
+        for (PersistentEntity entity in entities) {
+            GrailsDomainClass domain = registerGrailsDomainClass(entity.javaClass)
 
             Validator validator = registerDomainClassValidator(domain)
             simpleDatastore.mappingContext.addEntityValidator(entity, validator)
-
         }
         def enhancer = new GormEnhancer(simpleDatastore, transactionManager)
-        final failOnError = config?.grails?.gorm?.failOnError
+        final failOnError = getFailOnError()
         enhancer.failOnError = failOnError instanceof Boolean ? failOnError : false
 
-        simpleDatastore.mappingContext.initialize()
+        initializeMappingContext()
+
         enhancer.enhance()
     }
+
+    protected void initializeMappingContext() {
+        simpleDatastore.mappingContext.initialize()
+    }
+
+    protected getFailOnError() {
+        config?.grails?.gorm?.failOnError
+    }
+
     /**
      * Mocks a domain class providing the equivalent GORM behavior but against an in-memory concurrent hash map instead
      * of a database
@@ -142,21 +157,12 @@ class DomainClassUnitTestMixin extends GrailsUnitTestMixin {
      * @param domainClassToMock The domain class to mock
      * @return An instance of the mocked domain class
      */
+    @CompileStatic
     def mockDomain(Class domainClassToMock, List domains = []) {
-        initialMockDomainSetup()
-        PersistentEntity entity = simpleDatastore.mappingContext.addPersistentEntity(domainClassToMock)
-        GrailsDomainClass domain = registerGrailsDomainClass(domainClassToMock)
-        simpleDatastore.mappingContext.initialize()
-//        DomainClassGrailsPlugin.addRelationshipManagementMethods(domain, applicationContext)
-        Validator validator = registerDomainClassValidator(domain)
-        simpleDatastore.mappingContext.addEntityValidator(entity, validator)
-
-        enhanceSingleEntity(entity)
+        mockDomains(domainClassToMock)
+        final entity = simpleDatastore.mappingContext.getPersistentEntity(domainClassToMock.name)
         if (domains) {
             saveDomainList(entity, domains)
-        }
-        else {
-            return applicationContext.getBean(domain.fullName)
         }
     }
 
@@ -201,12 +207,12 @@ class DomainClassUnitTestMixin extends GrailsUnitTestMixin {
             }
         }
 
-        def validator = applicationContext.getBean(validationBeanName, Validator.class)
-        validator
+        applicationContext.getBean(validationBeanName, Validator)
     }
 
+    @CompileStatic
     protected GrailsDomainClass registerGrailsDomainClass(Class domainClassToMock) {
-        GrailsDomainClass domain = grailsApplication.addArtefact(DomainClassArtefactHandler.TYPE, domainClassToMock)
+        GrailsDomainClass domain = (GrailsDomainClass)grailsApplication.addArtefact(DomainClassArtefactHandler.TYPE, domainClassToMock)
 
         final mc = GrailsClassUtils.getExpandoMetaClass(domainClassToMock)
 

@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.plugins;
 
 import groovy.util.slurpersupport.GPathResult;
@@ -68,7 +67,7 @@ public class BinaryGrailsPlugin extends DefaultGrailsPlugin {
         }
     }
 
-    protected void initializeViewMap(@SuppressWarnings("hiding") BinaryGrailsPluginDescriptor descriptor) {
+    protected void initializeViewMap(BinaryGrailsPluginDescriptor descriptor) {
         final Resource descriptorResource = descriptor.getResource();
 
         final Resource viewsPropertiesResource;
@@ -109,7 +108,7 @@ public class BinaryGrailsPlugin extends DefaultGrailsPlugin {
         }
     }
 
-    protected void initializeProvidedArtefacts(@SuppressWarnings("hiding") GPathResult descriptor) {
+    protected void initializeProvidedArtefacts(GPathResult descriptor) {
 
         List<Class> artefacts = new ArrayList<Class>();
         if (descriptor != null) {
@@ -144,7 +143,6 @@ public class BinaryGrailsPlugin extends DefaultGrailsPlugin {
     public BinaryGrailsPluginDescriptor getBinaryDescriptor() {
         return descriptor;
     }
-
 
     /**
      * Resolves a static resource contained within this binary plugin

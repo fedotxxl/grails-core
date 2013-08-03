@@ -52,6 +52,18 @@ class GrailsMockTests extends GroovyTestCase {
         mockControl.verify()
     }
 
+    void testMethodWithDemandExplicit() {
+        def mockControl = new GrailsMock(GrailsMockCollaborator)
+        mockControl.demandExplicit.save(1..1) { -> false }
+
+        def testClass = new GrailsMockTestClass()
+        testClass.collaborator = mockControl.createMock()
+
+        assertFalse testClass.testMethod()
+
+        mockControl.verify()
+    }
+
     void testVerifyFails() {
         def mockControl = new GrailsMock(GrailsMockCollaborator)
         mockControl.demand.save(2..2) { -> false }
@@ -63,6 +75,28 @@ class GrailsMockTests extends GroovyTestCase {
 
         shouldFail(AssertionFailedError) {
             mockControl.verify()
+        }
+    }
+
+    void testExplicitVerifyFails() {
+        def mockControl = new GrailsMock(GrailsMockCollaborator)
+        mockControl.demandExplicit.save(2..2) { -> false }
+
+        def testClass = new GrailsMockTestClass()
+        testClass.collaborator = mockControl.createMock()
+
+        assertFalse testClass.testMethod()
+
+        shouldFail(AssertionFailedError) {
+            mockControl.verify()
+        }
+    }
+
+    void testExplicitVerifyFailsOnMissingMethod() {
+        def mockControl = new GrailsMock(GrailsMockCollaborator)
+
+        shouldFail(ExplicitDemandException) {
+            mockControl.demandExplicit.invalidMethod(1..1) { -> false }
         }
     }
 
@@ -404,16 +438,16 @@ class GrailsMockImpl implements GrailsMockInterface {
 
 class GrailsMockWithMetaClassGetProperty {
     static {
-        setMetaClass(GroovySystem.getMetaClassRegistry().getMetaClass(GrailsMockWithMetaClassGetProperty.class), GrailsMockWithMetaClassGetProperty.class);
+        setMetaClass(GroovySystem.getMetaClassRegistry().getMetaClass(GrailsMockWithMetaClassGetProperty), GrailsMockWithMetaClassGetProperty)
     }
 
     protected static void setMetaClass(final MetaClass metaClass, Class nodeClass) {
         final MetaClass newMetaClass = new DelegatingMetaClass(metaClass) {
             @Override
-            public Object getProperty(Object object, String property) {
+            Object getProperty(Object object, String property) {
                 'string returned from metaClass getProperty()'
             }
-        };
-        GroovySystem.getMetaClassRegistry().setMetaClass(nodeClass, newMetaClass);
+        }
+        GroovySystem.getMetaClassRegistry().setMetaClass(nodeClass, newMetaClass)
     }
 }

@@ -16,6 +16,7 @@
 package org.codehaus.groovy.grails.web.converters.marshaller.xml;
 
 import grails.converters.XML;
+import grails.persistence.Entity;
 import grails.persistence.PersistenceMethod;
 import grails.web.controllers.ControllerMethod;
 import groovy.lang.GroovyObject;
@@ -24,8 +25,12 @@ import java.beans.PropertyDescriptor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.List;
 
+import org.codehaus.groovy.grails.commons.GrailsDomainClassProperty;
+import org.codehaus.groovy.grails.support.IncludeExcludeSupport;
 import org.codehaus.groovy.grails.web.converters.exceptions.ConverterException;
+import org.codehaus.groovy.grails.web.converters.marshaller.IncludeExcludePropertyMarshaller;
 import org.codehaus.groovy.grails.web.converters.marshaller.ObjectMarshaller;
 import org.springframework.beans.BeanUtils;
 
@@ -33,7 +38,7 @@ import org.springframework.beans.BeanUtils;
  * @author Siegfried Puchbauer
  * @since 1.1
  */
-public class GroovyBeanMarshaller implements ObjectMarshaller<XML> {
+public class GroovyBeanMarshaller extends IncludeExcludePropertyMarshaller<XML> {
 
     public boolean supports(Object object) {
         return object instanceof GroovyObject;
@@ -41,10 +46,20 @@ public class GroovyBeanMarshaller implements ObjectMarshaller<XML> {
 
     public void marshalObject(Object o, XML xml) throws ConverterException {
         try {
+            Class<? extends Object> clazz = o.getClass();
+            List<String> excludes = xml.getExcludes(clazz);
+            List<String> includes = xml.getIncludes(clazz);
+            IncludeExcludeSupport<String> includeExcludeSupport = new IncludeExcludeSupport<String>();
+
+            boolean isEntity = o.getClass().getAnnotation(Entity.class)!=null;
             for (PropertyDescriptor property : BeanUtils.getPropertyDescriptors(o.getClass())) {
                 String name = property.getName();
+
+                if(!shouldInclude(includeExcludeSupport,includes,excludes,o, name)) continue;
+
+                if(isEntity && (name.equals(GrailsDomainClassProperty.ATTACHED) || name.equals(GrailsDomainClassProperty.ERRORS))) continue;
                 Method readMethod = property.getReadMethod();
-                if (readMethod != null && !(name.equals("metaClass"))) {
+                if (readMethod != null && !(name.equals("metaClass"))&& !(name.equals("class"))) {
                     if(readMethod.getAnnotation(PersistenceMethod.class) != null) continue;
                     if(readMethod.getAnnotation(ControllerMethod.class) != null) continue;
                     Object value = readMethod.invoke(o, (Object[]) null);
@@ -56,7 +71,10 @@ public class GroovyBeanMarshaller implements ObjectMarshaller<XML> {
             for (Field field : o.getClass().getDeclaredFields()) {
                 int modifiers = field.getModifiers();
                 if (Modifier.isPublic(modifiers) && !(Modifier.isStatic(modifiers) || Modifier.isTransient(modifiers))) {
-                    xml.startNode(field.getName());
+                    String name = field.getName();
+                    if(!shouldInclude(includeExcludeSupport,includes,excludes,o, name)) continue;
+                    if(isEntity && (name.equals(GrailsDomainClassProperty.ATTACHED) || name.equals(GrailsDomainClassProperty.ERRORS))) continue;
+                    xml.startNode(name);
                     xml.convertAnother(field.get(o));
                     xml.end();
                 }
@@ -70,4 +88,7 @@ public class GroovyBeanMarshaller implements ObjectMarshaller<XML> {
         }
     }
 
+    private boolean shouldInclude(IncludeExcludeSupport<String> includeExcludeSupport, List<String> includes, List<String> excludes, Object o, String name) {
+        return includeExcludeSupport.shouldInclude(includes,excludes, name) && shouldInclude(o,name);
+    }
 }

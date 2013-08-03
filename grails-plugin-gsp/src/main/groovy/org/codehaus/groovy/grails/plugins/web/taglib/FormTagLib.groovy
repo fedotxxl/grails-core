@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +16,24 @@
 package org.codehaus.groovy.grails.plugins.web.taglib
 
 import grails.artefact.Artefact
+import groovy.transform.CompileStatic
 
 import java.text.DateFormat
 import java.text.DateFormatSymbols
 
 import org.codehaus.groovy.grails.commons.DomainClassArtefactHandler
 import org.codehaus.groovy.grails.web.mapping.LinkGenerator
+import org.codehaus.groovy.grails.web.pages.FastStringWriter
 import org.codehaus.groovy.grails.web.servlet.mvc.SynchronizerTokensHolder
-import org.codehaus.groovy.grails.web.util.StreamCharBuffer
-import org.springframework.beans.SimpleTypeConverter
+import org.codehaus.groovy.runtime.InvokerHelper
+import org.springframework.beans.factory.InitializingBean
+import org.springframework.context.ApplicationContext
+import org.springframework.context.ApplicationContextAware
 import org.springframework.context.MessageSourceResolvable
+import org.springframework.core.convert.ConversionService
 import org.springframework.http.HttpMethod
 import org.springframework.web.servlet.support.RequestContextUtils as RCU
+import org.springframework.web.servlet.support.RequestDataValueProcessor
 
 /**
  * Tags for working with form controls.
@@ -34,11 +41,21 @@ import org.springframework.web.servlet.support.RequestContextUtils as RCU
  * @author Graeme Rocher
  */
 @Artefact("TagLibrary")
-class FormTagLib {
+class FormTagLib implements ApplicationContextAware, InitializingBean {
 
     private static final DEFAULT_CURRENCY_CODES = ['EUR', 'XCD', 'USD', 'XOF', 'NOK', 'AUD',
                                                    'XAF', 'NZD', 'MAD', 'DKK', 'GBP', 'CHF',
                                                    'XPF', 'ILS', 'ROL', 'TRL']
+
+    ApplicationContext applicationContext
+    RequestDataValueProcessor requestDataValueProcessor
+    ConversionService conversionService
+
+    void afterPropertiesSet() {
+        if (applicationContext.containsBean('requestDataValueProcessor')) {
+            requestDataValueProcessor = applicationContext.getBean('requestDataValueProcessor', RequestDataValueProcessor)
+        }
+    }
 
     /**
      * Creates a new text field.
@@ -115,17 +132,22 @@ class FormTagLib {
         fieldImpl(out, attrs)
     }
 
-    def fieldImpl(out, attrs) {
+    @CompileStatic
+    def fieldImpl(Writer out, Map attrs) {
         resolveAttributes(attrs)
+
+        attrs.value = processFormFieldValueIfNecessary(attrs.name, attrs.value, attrs.type)
+
         out << "<input type=\"${attrs.remove('type')}\" "
         outputAttributes(attrs, out, true)
         out << "/>"
     }
 
-    private outputNameAsIdIfIdDoesNotExist(attrs, out) {
+    @CompileStatic
+    private void outputNameAsIdIfIdDoesNotExist(Map attrs, Writer out) {
         if (!attrs.containsKey('id') && attrs.containsKey('name')) {
             out << 'id="'
-            out << attrs.name?.encodeAsHTML()
+            out << InvokerHelper.invokeMethod(String.valueOf(attrs.name), "encodeAsHTML", null)
             out << '" '
         }
     }
@@ -161,8 +183,16 @@ class FormTagLib {
         if (checked instanceof String) checked = Boolean.valueOf(checked)
 
         if (value == null) value = false
+        def hiddenValue = ""
 
-        out << "<input type=\"hidden\" name=\"_${name}\" /><input type=\"checkbox\" name=\"${name}\" "
+        value = processFormFieldValueIfNecessary(name, value,"checkbox")
+        hiddenValue = processFormFieldValueIfNecessary("_${name}", hiddenValue, "hidden")
+
+        out << "<input type=\"hidden\" name=\"_${name}\""
+        if (hiddenValue != "") {
+            out << " value=\"${hiddenValue}\""
+        }
+        out << " /><input type=\"checkbox\" name=\"${name}\" "
         if (checkedAttributeWasSpecified) {
             if (checked) {
                 out << 'checked="checked" '
@@ -172,7 +202,7 @@ class FormTagLib {
             out << 'checked="checked" '
         }
 
-        def outputValue = !(value instanceof Boolean || value?.class == boolean.class)
+        def outputValue = !(value instanceof Boolean || value?.getClass() == boolean)
         if (outputValue) {
             out << "value=\"${value}\" "
         }
@@ -209,9 +239,14 @@ class FormTagLib {
             attrs.remove 'escapeHtml'
         }
 
+        // Add textarea field to requestDataValueProcessor
+        def content = (escapeHtml ? value.encodeAsHTML() : value)
+        if (attrs.name) {
+            content = processFormFieldValueIfNecessary(attrs.name,content,"textarea" )
+        }
         out << "<textarea "
         outputAttributes(attrs, out, true)
-        out << ">" << (escapeHtml ? value.encodeAsHTML() : value) << "</textarea>"
+        out << ">" << content << "</textarea>"
     }
 
     /**
@@ -219,14 +254,18 @@ class FormTagLib {
      * mandates the attribute must have the same value as its name. For example,
      * disabled, readonly and checked.
      */
-    private void booleanToAttribute(def attrs, String attrName) {
+    @CompileStatic
+    private void booleanToAttribute(Map attrs, String attrName) {
         def attrValue = attrs.remove(attrName)
+        if (attrValue instanceof CharSequence) {
+            attrValue = attrValue.toString().trim()
+        }
         // If the value is the same as the name or if it is a boolean value,
         // reintroduce the attribute to the map according to the w3c rules, so it is output later
-        if (Boolean.valueOf(attrValue) ||
-           (attrValue instanceof String && attrValue?.equalsIgnoreCase(attrName))) {
+        if ((attrValue instanceof Boolean && attrValue) ||
+            (attrValue instanceof String && (attrValue.equalsIgnoreCase("true") || attrValue.equalsIgnoreCase(attrName)))) {
             attrs.put(attrName, attrName)
-        } else if (attrValue instanceof String && !attrValue?.equalsIgnoreCase('false')) {
+        } else if (attrValue instanceof String && !attrValue.equalsIgnoreCase("false")) {
             // If the value is not the string 'false', then we should just pass it on to
             // keep compatibility with existing code
             attrs.put(attrName, attrValue)
@@ -236,7 +275,7 @@ class FormTagLib {
     /**
      * Check required attributes, set the id to name if no id supplied, extract bean values etc.
      */
-    void resolveAttributes(attrs) {
+    void resolveAttributes(Map attrs) {
         if (!attrs.name && !attrs.field) {
             throwTagError("Tag [${attrs.tagName}] is missing required attribute [name] or [field]")
         }
@@ -265,14 +304,12 @@ class FormTagLib {
     /**
      * Dump out attributes in HTML compliant fashion.
      */
-    void outputAttributes(attrs, writer, boolean useNameAsIdIfIdDoesNotExist = false) {
+    @CompileStatic
+    void outputAttributes(Map attrs, Writer writer, boolean useNameAsIdIfIdDoesNotExist = false) {
         attrs.remove('tagName') // Just in case one is left
         attrs.each { k, v ->
-            if(v != null) {
-                writer << k
-                writer << '="'
-                writer << v.encodeAsHTML()
-                writer << '" '
+            if (v != null) {
+                writer << "$k=\"${InvokerHelper.invokeMethod(v.toString(), "encodeAsHTML", null)}\" "
             }
         }
         if (useNameAsIdIfIdDoesNotExist) {
@@ -312,7 +349,7 @@ class FormTagLib {
      */
     Closure form = { attrs, body ->
 
-        def useToken = false
+        boolean useToken = false
         if (attrs.containsKey('useToken')) {
             useToken = attrs.boolean('useToken')
             attrs.remove('useToken')
@@ -323,10 +360,17 @@ class FormTagLib {
         def linkAttrs = attrs.subMap(LinkGenerator.LINK_ATTRIBUTES)
 
         writer << "<form action=\""
-        writer << createLink(linkAttrs)
+
+        // Call RequestDataValueProcessor to modify url if necessary
+        def link = createLink(linkAttrs)
+        if (requestDataValueProcessor != null) {
+            link= requestDataValueProcessor.processAction(request, link)
+        }
+
+        writer << link
         writer << "\" "
 
-        // if URL is not nul remove attributes
+        // if URL is not null remove attributes
         if (attrs.url == null) {
             attrs = attrs - linkAttrs
         }
@@ -335,7 +379,7 @@ class FormTagLib {
         }
 
         // default to post
-        def method = attrs.remove('method')?.toUpperCase() ?: 'POST'
+        def method = linkAttrs[LinkGenerator.ATTRIBUTE_METHOD]?.toUpperCase() ?: 'POST'
         def httpMethod = HttpMethod.valueOf(method)
         boolean notGet = httpMethod != HttpMethod.GET
 
@@ -346,6 +390,7 @@ class FormTagLib {
             writer << 'method="get" '
         }
 
+        attrs.remove('method')
         // process remaining attributes
         if (attrs.id == null) attrs.remove('id')
 
@@ -372,8 +417,20 @@ class FormTagLib {
         // output the body
         writer << body()
 
+        //Write RequestDataValueProcessor hidden fields if necessary
+        if (requestDataValueProcessor != null) {
+            writeHiddenFields requestDataValueProcessor.getExtraHiddenFields(request)
+        }
         // close tag
         writer << "</form>"
+    }
+
+    /**
+     * generate hidden inputs
+     */
+    private void writeHiddenFields(hiddenFields) {
+        def writer = getOut()
+        hiddenFields.each { key, value -> writer << "<input type=\"hidden\" name=\"${key}\" value=\"${value}\" />\n" }
     }
 
     /**
@@ -407,6 +464,8 @@ class FormTagLib {
         // add action and value
         def value = attrs.remove('value')
         def action = attrs.remove('action') ?: value
+        // Change value if necessary in requestDataValueProcessor
+        value = processFormFieldValueIfNecessary("_action_${action}",value,"submit")
         booleanToAttribute(attrs, 'disabled')
 
         out << "<input type=\"submit\" name=\"_action_${action}\" value=\"${value}\" "
@@ -443,6 +502,8 @@ class FormTagLib {
         // add action and value
         def value = attrs.remove('value')
         def action = attrs.remove('action') ?: value
+        //Change this button to use requestDataValueProcessor
+        value = processFormFieldValueIfNecessary("_action_${action}","${value}","image")
         booleanToAttribute(attrs, 'disabled')
 
         out << "<input type=\"image\" name=\"_action_${action}\" value=\"${value}\" "
@@ -450,6 +511,7 @@ class FormTagLib {
         // add image src
         def src = attrs.remove('src')
         if (src) {
+            src = processedUrl(src, request)
             out << "src=\"${src}\" "
         }
 
@@ -467,7 +529,8 @@ class FormTagLib {
      * @emptyTag
      *
      * @attr name REQUIRED The name of the date picker field set
-     * @attr value The current value of the date picker; defaults to now if not specified
+     * @attr value The current value of the date picker; defaults to either the value specified by the default attribute or now if no default is set
+     * @attr default A Date or parsable date string that will be used if there is no value
      * @attr precision The desired granularity of the date to be rendered
      * @attr noSelection A single-entry map detailing the key and value to use for the "no selection made" choice in the select box. If there is no current selection this will be shown as it is first in the list, and if submitted with this selected, the key that you provide will be submitted. Typically this will be blank.
      * @attr years A list or range of years to display, in the order specified. i.e. specify 2007..1900 for a reverse order list going back to 1900. If this attribute is not specified, a range of years from the current year - 100 to current year + 100 will be shown.
@@ -502,7 +565,7 @@ class FormTagLib {
         if (relativeYears != null) {
             if (!(relativeYears instanceof IntRange)) {
                 // allow for a syntax like relativeYears="[-2..5]".  The value there is a List containing an IntRage.
-                if ((!(relativeYears instanceof List)) || (relativeYears.size() != 1) || (!(relativeYears[0] instanceof IntRange))){
+                if ((!(relativeYears instanceof List)) || (relativeYears.size() != 1) || (!(relativeYears[0] instanceof IntRange))) {
                     throwTagError 'The [datePicker] relativeYears attribute must be a range of int.'
                 }
                 relativeYears = relativeYears[0]
@@ -571,14 +634,16 @@ class FormTagLib {
                     years = (tempyear + relativeYears.fromInt)..(tempyear + relativeYears.toInt)
                 }
             } else {
-                years = (tempyear - 100)..(tempyear + 100)
+                years = (tempyear + 100)..(tempyear - 100)
             }
         }
 
         booleanToAttribute(attrs, 'disabled')
         booleanToAttribute(attrs, 'readonly')
 
-        out.println "<input type=\"hidden\" name=\"${name}\" value=\"date.struct\" />"
+        // Change this hidden to use requestDataValueProcessor
+        def dateStructValue = processFormFieldValueIfNecessary("${name}","date.struct","hidden")
+        out.println "<input type=\"hidden\" name=\"${name}\" value=\"${dateStructValue}\" />"
 
         // create day select
         if (precision >= PRECISION_RANKINGS["day"]) {
@@ -597,7 +662,9 @@ class FormTagLib {
             }
 
             for (i in 1..31) {
-                out.println "<option value=\"${i}\"${i == day ? ' selected="selected"' : ''}>${i}</option>"
+                // Change this option to use requestDataValueProcessor
+                def dayIndex = processFormFieldValueIfNecessary("${name}_day","${i}","option")
+                out.println "<option value=\"${dayIndex}\"${i == day ? ' selected="selected"' : ''}>${i}</option>"
             }
             out.println '</select>'
         }
@@ -621,6 +688,7 @@ class FormTagLib {
             dfs.months.eachWithIndex {m, i ->
                 if (m) {
                     def monthIndex = i + 1
+                    monthIndex = processFormFieldValueIfNecessary("${name}_month","${monthIndex}","option")
                     out.println "<option value=\"${monthIndex}\"${i == month ? ' selected="selected"' : ''}>$m</option>"
                 }
             }
@@ -644,7 +712,9 @@ class FormTagLib {
             }
 
             for (i in years) {
-                out.println "<option value=\"${i}\"${i == year ? ' selected="selected"' : ''}>${i}</option>"
+                // Change this year option to use requestDataValueProcessor
+                def yearIndex  = processFormFieldValueIfNecessary("${name}_year","${i}","option")
+                out.println "<option value=\"${yearIndex}\"${i == year ? ' selected="selected"' : ''}>${i}</option>"
             }
             out.println '</select>'
         }
@@ -668,6 +738,8 @@ class FormTagLib {
             for (i in 0..23) {
                 def h = '' + i
                 if (i < 10) h = '0' + h
+                // This option add hour to requestDataValueProcessor
+                h  = processFormFieldValueIfNecessary("${name}_hour","${h}","option")
                 out.println "<option value=\"${h}\"${i == hour ? ' selected="selected"' : ''}>$h</option>"
             }
             out.println '</select> :'
@@ -697,6 +769,7 @@ class FormTagLib {
             for (i in 0..59) {
                 def m = '' + i
                 if (i < 10) m = '0' + m
+                m  = processFormFieldValueIfNecessary("${name}_minute","${m}","option")
                 out.println "<option value=\"${m}\"${i == minute ? ' selected="selected"' : ''}>$m</option>"
             }
             out.println '</select>'
@@ -736,7 +809,7 @@ class FormTagLib {
             def hour = offset / (60 * 60 * 1000)
             def min = Math.abs(offset / (60 * 1000)) % 60
 
-            return "${shortName}, ${longName} ${hour}:${min}"
+            return "${shortName}, ${longName} ${hour}:${min} [${it}]"
         }
 
         // use generic select
@@ -854,79 +927,77 @@ class FormTagLib {
         }
 
         // create options from list
-        if (from) {
-            from.eachWithIndex {el, i ->
-                def keyValue = null
-                writer << '<option '
-                if (keys) {
-                    keyValue = keys[i]
-                    writeValueAndCheckIfSelected(keyValue, value, writer)
+        from.eachWithIndex {el, i ->
+            def keyValue
+            writer << '<option '
+            if (keys) {
+                keyValue = keys[i]
+                writeValueAndCheckIfSelected(attrs.name, keyValue, value, writer)
+            }
+            else if (optionKey) {
+                def keyValueObject
+                if (optionKey instanceof Closure) {
+                    keyValue = optionKey(el)
                 }
-                else if (optionKey) {
-                    def keyValueObject = null
-                    if (optionKey instanceof Closure) {
-                        keyValue = optionKey(el)
-                    }
-                    else if (el != null && optionKey == 'id' && grailsApplication.getArtefact(DomainClassArtefactHandler.TYPE, el.getClass().name)) {
-                        keyValue = el.ident()
-                        keyValueObject = el
-                    }
-                    else {
-                        keyValue = el[optionKey]
-                        keyValueObject = el
-                    }
-                    writeValueAndCheckIfSelected(keyValue, value, writer, keyValueObject)
+                else if (el != null && optionKey == 'id' && grailsApplication.getArtefact(DomainClassArtefactHandler.TYPE, el.getClass().name)) {
+                    keyValue = el.ident()
+                    keyValueObject = el
                 }
                 else {
-                    keyValue = el
-                    writeValueAndCheckIfSelected(keyValue, value, writer)
+                    keyValue = el[optionKey]
+                    keyValueObject = el
                 }
-                writer << '>'
-                if (optionValue) {
-                    if (optionValue instanceof Closure) {
-                        writer << optionValue(el).toString().encodeAsHTML()
-                    }
-                    else {
-                        writer << el[optionValue].toString().encodeAsHTML()
-                    }
+                writeValueAndCheckIfSelected(attrs.name, keyValue, value, writer, keyValueObject)
+            }
+            else {
+                keyValue = el
+                writeValueAndCheckIfSelected(attrs.name, keyValue, value, writer)
+            }
+            writer << '>'
+            if (optionValue) {
+                if (optionValue instanceof Closure) {
+                    writer << optionValue(el).toString().encodeAsHTML()
                 }
-                else if (el instanceof MessageSourceResolvable) {
-                    writer << messageSource.getMessage(el, locale)
+                else {
+                    writer << el[optionValue].toString().encodeAsHTML()
                 }
-                else if (valueMessagePrefix) {
-                    def message = messageSource.getMessage("${valueMessagePrefix}.${keyValue}", null, null, locale)
-                    if (message != null) {
-                        writer << message.encodeAsHTML()
-                    }
-                    else if (keyValue && keys) {
-                        def s = el.toString()
-                        if (s) writer << s.encodeAsHTML()
-                    }
-                    else if (keyValue) {
-                        writer << keyValue.encodeAsHTML()
-                    }
-                    else {
-                        def s = el.toString()
-                        if (s) writer << s.encodeAsHTML()
-                    }
+            }
+            else if (el instanceof MessageSourceResolvable) {
+                writer << messageSource.getMessage(el, locale)
+            }
+            else if (valueMessagePrefix) {
+                def message = messageSource.getMessage("${valueMessagePrefix}.${keyValue}", null, null, locale)
+                if (message != null) {
+                    writer << message.encodeAsHTML()
+                }
+                else if (keyValue && keys) {
+                    def s = el.toString()
+                    if (s) writer << s.encodeAsHTML()
+                }
+                else if (keyValue) {
+                    writer << keyValue.encodeAsHTML()
                 }
                 else {
                     def s = el.toString()
                     if (s) writer << s.encodeAsHTML()
                 }
-                writer << '</option>'
-                writer.println()
             }
+            else {
+                def s = el.toString()
+                if (s) writer << s.encodeAsHTML()
+            }
+            writer << '</option>'
+            writer.println()
         }
         // close tag
         writer << '</select>'
     }
 
-    private writeValueAndCheckIfSelected(keyValue, value, writer) {
-        writeValueAndCheckIfSelected(keyValue, value, writer, null)
+    private void writeValueAndCheckIfSelected(selectName, keyValue, value, writer) {
+        writeValueAndCheckIfSelected(selectName, keyValue, value, writer, null)
     }
 
-    private writeValueAndCheckIfSelected(keyValue, value, writer, el) {
+    private void writeValueAndCheckIfSelected(selectName, keyValue, value, writer, el) {
 
         boolean selected = false
         def keyClass = keyValue?.getClass()
@@ -936,7 +1007,7 @@ class FormTagLib {
         else if (value instanceof Collection) {
             // first try keyValue
             selected = value.contains(keyValue)
-            if (! selected && el != null) {
+            if (!selected && el != null) {
                 selected = value.contains(el)
             }
         }
@@ -947,14 +1018,14 @@ class FormTagLib {
         }
         else if (keyClass && value != null) {
             try {
-                def typeConverter = new SimpleTypeConverter()
-                value = typeConverter.convertIfNecessary(value, keyClass)
-                selected = (keyValue == value)
+                value = conversionService.convert(value, keyClass)
+                selected = keyValue == value
             }
             catch (e) {
                 // ignore
             }
         }
+        keyValue = processFormFieldValueIfNecessary(selectName, "${keyValue}","option")
         writer << "value=\"${keyValue}\" "
         if (selected) {
             writer << 'selected="selected" '
@@ -980,6 +1051,7 @@ class FormTagLib {
         booleanToAttribute(attrs, 'readonly')
 
         def checked = attrs.remove('checked') ? true : false
+        value = processFormFieldValueIfNecessary(name, "${value?.toString()?.encodeAsHTML()}","radio")
         out << "<input type=\"radio\" name=\"${name}\"${ checked ? ' checked="checked" ' : ' '}value=\"${value?.toString()?.encodeAsHTML()}\" "
         if (!attrs.containsKey('id')) {
             out << """id="${name}" """
@@ -1011,20 +1083,42 @@ class FormTagLib {
 
         values.eachWithIndex {val, idx ->
             def it = new Expando()
-            it.radio = new StringBuilder("<input type=\"radio\" name=\"${name}\" ")
+            def radioWriter = new FastStringWriter()
+            it.radio = radioWriter.buffer
+            radioWriter << "<input type=\"radio\" name=\"${name}\" "
             if (value?.toString().equals(val.toString())) {
-                it.radio << 'checked="checked" '
+                radioWriter << 'checked="checked" '
             }
-            it.radio << "value=\"${val.toString().encodeAsHTML()}\" "
+            // Generate
+            def processedVal = processFormFieldValueIfNecessary(name, val.toString().encodeAsHTML(), "radio")
+            radioWriter << "value=\"${processedVal}\" "
 
             // process remaining attributes
-            outputAttributes(attrs, it.radio)
-            it.radio << "/>"
+            outputAttributes(attrs, radioWriter)
+            radioWriter << "/>"
 
             it.label = labels == null ? 'Radio ' + val : labels[idx]
 
             out << body(it)
             out.println()
         }
+    }
+
+    private processFormFieldValueIfNecessary(name, value, type) {
+        if (requestDataValueProcessor != null) {
+            value = requestDataValueProcessor.processFormFieldValue(request, name, "${value}", type)
+        }
+        return value
+    }
+
+    /**
+     * Filters the url through the RequestDataValueProcessor bean if it is registered.
+     */
+    String processedUrl(String link, request) {
+        if (requestDataValueProcessor == null) {
+            return link
+        }
+
+        return requestDataValueProcessor.processUrl(request, link)
     }
 }

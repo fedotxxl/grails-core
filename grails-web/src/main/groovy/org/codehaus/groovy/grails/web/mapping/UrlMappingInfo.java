@@ -38,6 +38,18 @@ public interface UrlMappingInfo {
     String getURI();
 
     /**
+     * The HTTP method that this URL mapping maps to
+     *
+     * @return The http method
+     */
+    String getHttpMethod();
+
+    /**
+     * @return The version of the API (for REST)
+     */
+    String getVersion();
+
+    /**
      * The name of the controller that the URL mapping maps to
      *
      * @return The name of the controller
@@ -50,7 +62,17 @@ public interface UrlMappingInfo {
      * @return The name of the action or null if not known
      */
     String getActionName();
-    
+
+    /**
+     * @return the namespace of the corresponding controller, null if none was specified
+     */
+    String getNamespace();
+
+    /**
+     * The name of the plugin that this UrlMappingInfo maps to
+     *
+     * @return The plugin name
+     */
     String getPluginName();
 
     /**
@@ -89,4 +111,16 @@ public interface UrlMappingInfo {
      * @return true if it is
      */
     boolean isParsingRequest();
+    
+    /**
+     * The redirect information should be a String or a Map.  If it
+     * is a String that string is the URI to redirect to.  If it is
+     * a Map, that Map may contain any entries supported as arguments
+     * to the dynamic redirect(Map) method on a controller.
+     * 
+     * @return redirect information for this url mapping, null if no redirect is specified
+     */
+    Object getRedirectInfo();
+
+
 }

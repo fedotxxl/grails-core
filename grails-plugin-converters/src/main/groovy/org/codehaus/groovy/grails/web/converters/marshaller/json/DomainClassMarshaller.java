@@ -16,11 +16,13 @@
 package org.codehaus.groovy.grails.web.converters.marshaller.json;
 
 import grails.converters.JSON;
+import groovy.lang.GroovyObject;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
@@ -28,26 +30,32 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import org.codehaus.groovy.grails.commons.ClassPropertyFetcher;
 import org.codehaus.groovy.grails.commons.DomainClassArtefactHandler;
 import org.codehaus.groovy.grails.commons.GrailsApplication;
-import org.codehaus.groovy.grails.commons.GrailsClassUtils;
 import org.codehaus.groovy.grails.commons.GrailsDomainClass;
 import org.codehaus.groovy.grails.commons.GrailsDomainClassProperty;
+import org.codehaus.groovy.grails.support.IncludeExcludeSupport;
 import org.codehaus.groovy.grails.support.proxy.DefaultProxyHandler;
 import org.codehaus.groovy.grails.support.proxy.EntityProxyHandler;
 import org.codehaus.groovy.grails.support.proxy.ProxyHandler;
 import org.codehaus.groovy.grails.web.converters.ConverterUtil;
 import org.codehaus.groovy.grails.web.converters.exceptions.ConverterException;
-import org.codehaus.groovy.grails.web.converters.marshaller.ObjectMarshaller;
+import org.codehaus.groovy.grails.web.converters.marshaller.IncludeExcludePropertyMarshaller;
 import org.codehaus.groovy.grails.web.json.JSONWriter;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
 
 /**
+ *
+ * Object marshaller for domain classes to JSON
+ *
  * @author Siegfried Puchbauer
+ * @author Graeme Rocher
+ *
  * @since 1.1
  */
-public class DomainClassMarshaller implements ObjectMarshaller<JSON> {
+public class DomainClassMarshaller extends IncludeExcludePropertyMarshaller<JSON> {
 
     private boolean includeVersion = false;
     private ProxyHandler proxyHandler;
@@ -82,27 +90,39 @@ public class DomainClassMarshaller implements ObjectMarshaller<JSON> {
         value = proxyHandler.unwrapIfProxy(value);
         Class<?> clazz = value.getClass();
 
+        List<String> excludes = json.getExcludes(clazz);
+        List<String> includes = json.getIncludes(clazz);
+        IncludeExcludeSupport<String> includeExcludeSupport = new IncludeExcludeSupport<String>();
+
         GrailsDomainClass domainClass = (GrailsDomainClass)application.getArtefact(
               DomainClassArtefactHandler.TYPE, ConverterUtil.trimProxySuffix(clazz.getName()));
         BeanWrapper beanWrapper = new BeanWrapperImpl(value);
 
         writer.object();
-        writer.key("class").value(domainClass.getClazz().getName());
+
+        if(shouldInclude(includeExcludeSupport, includes, excludes, value, "class")) {
+            writer.key("class").value(domainClass.getClazz().getName());
+        }
+
 
         GrailsDomainClassProperty id = domainClass.getIdentifier();
-        Object idValue = extractValue(value, id);
 
-        json.property("id", idValue);
+        if(shouldInclude(includeExcludeSupport, includes, excludes, value, id.getName())) {
+            Object idValue = extractValue(value, id);
+            json.property(GrailsDomainClassProperty.IDENTITY, idValue);
+        }
 
-        if (isIncludeVersion()) {
+        if (shouldInclude(includeExcludeSupport, includes, excludes, value, GrailsDomainClassProperty.VERSION) && isIncludeVersion()) {
             GrailsDomainClassProperty versionProperty = domainClass.getVersion();
             Object version = extractValue(value, versionProperty);
-            json.property("version", version);
+            json.property(GrailsDomainClassProperty.VERSION, version);
         }
 
         GrailsDomainClassProperty[] properties = domainClass.getPersistentProperties();
 
         for (GrailsDomainClassProperty property : properties) {
+            if(!shouldInclude(includeExcludeSupport, includes, excludes, value, property.getName())) continue;
+
             writer.key(property.getName());
             if (!property.isAssociation()) {
                 // Write non-relation property
@@ -143,7 +163,7 @@ public class DomainClassMarshaller implements ObjectMarshaller<JSON> {
                         GrailsDomainClass referencedDomainClass = property.getReferencedDomainClass();
 
                         // Embedded are now always fully rendered
-                        if (referencedDomainClass == null || property.isEmbedded() || GrailsClassUtils.isJdk5Enum(property.getType())) {
+                        if (referencedDomainClass == null || property.isEmbedded() || property.getType().isEnum()) {
                             json.convertAnother(referenceObject);
                         }
                         else if (property.isOneToOne() || property.isManyToOne() || property.isEmbedded()) {
@@ -180,6 +200,10 @@ public class DomainClassMarshaller implements ObjectMarshaller<JSON> {
         writer.endObject();
     }
 
+    private boolean shouldInclude(IncludeExcludeSupport<String> includeExcludeSupport, List<String> includes, List<String> excludes, Object object, String propertyName) {
+        return includeExcludeSupport.shouldInclude(includes,excludes,propertyName) && shouldInclude(object,propertyName);
+    }
+
     protected void asShortObject(Object refObj, JSON json, GrailsDomainClassProperty idProperty, GrailsDomainClass referencedDomainClass) throws ConverterException {
 
         Object idValue;
@@ -201,8 +225,13 @@ public class DomainClassMarshaller implements ObjectMarshaller<JSON> {
     }
 
     protected Object extractValue(Object domainObject, GrailsDomainClassProperty property) {
-        BeanWrapper beanWrapper = new BeanWrapperImpl(domainObject);
-        return beanWrapper.getPropertyValue(property.getName());
+        if(domainObject instanceof GroovyObject) {
+            return ((GroovyObject)domainObject).getProperty(property.getName());
+        }
+        else {
+            ClassPropertyFetcher propertyFetcher = ClassPropertyFetcher.forClass(domainObject.getClass());
+            return propertyFetcher.getPropertyValue(domainObject, property.getName());
+        }
     }
 
     protected boolean isRenderDomainClassRelations() {

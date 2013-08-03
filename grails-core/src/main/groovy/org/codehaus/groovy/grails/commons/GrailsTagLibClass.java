@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +29,8 @@ public interface GrailsTagLibClass extends InjectableGrailsClass {
     String NAMESPACE_FIELD_NAME = "namespace";
 
     String RETURN_OBJECT_FOR_TAGS_FIELD_NAME = "returnObjectForTags";
+    String ENCODE_AS_FOR_TAGS_FIELD_NAME = "encodeAsForTags";
+    String DEFAULT_ENCODE_AS_FIELD_NAME = "defaultEncodeAs";
 
     /**
      * @param tagName The name of the tag
@@ -46,4 +49,7 @@ public interface GrailsTagLibClass extends InjectableGrailsClass {
      * @return the namespace that this taglib occupies.
      */
     String getNamespace();
+
+    Object getEncodeAsForTag(String tagName);
+    Object getDefaultEncodeAs();
 }

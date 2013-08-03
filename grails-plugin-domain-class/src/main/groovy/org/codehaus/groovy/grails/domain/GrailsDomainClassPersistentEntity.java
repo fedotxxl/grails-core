@@ -1,4 +1,5 @@
-/* Copyright (C) 2011 SpringSource
+/*
+ * Copyright 2011 SpringSource
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +22,8 @@ import java.util.Map;
 
 import org.codehaus.groovy.grails.commons.GrailsDomainClass;
 import org.codehaus.groovy.grails.commons.GrailsDomainClassProperty;
+import org.grails.datastore.mapping.config.Entity;
+import org.grails.datastore.mapping.config.Property;
 import org.grails.datastore.mapping.model.AbstractClassMapping;
 import org.grails.datastore.mapping.model.ClassMapping;
 import org.grails.datastore.mapping.model.IdentityMapping;
@@ -65,7 +68,6 @@ public class GrailsDomainClassPersistentEntity implements PersistentEntity {
     }
 
     public void initialize() {
-        @SuppressWarnings("hiding")
         final GrailsDomainClassProperty identifier = domainClass.getIdentifier();
         if (identifier != null) {
             this.identifier = new GrailsDomainClassPersistentProperty(this, identifier);
@@ -115,7 +117,6 @@ public class GrailsDomainClassPersistentEntity implements PersistentEntity {
         isInitialized = true;
     }
 
-    @Override
     public boolean isInitialized() {
         return isInitialized;
     }
@@ -137,12 +138,7 @@ public class GrailsDomainClassPersistentEntity implements PersistentEntity {
     }
 
     public PersistentProperty getPropertyByName(String name) {
-        if(getIdentity().getName().equals(name)) {
-            return getIdentity();
-        }
-        else {
-            return propertiesByName.get(name);
-        }
+        return getIdentity().getName().equals(name) ? getIdentity() : propertiesByName.get(name);
     }
 
     public Class getJavaClass() {
@@ -154,10 +150,12 @@ public class GrailsDomainClassPersistentEntity implements PersistentEntity {
     }
 
     public ClassMapping getMapping() {
+        final Entity e = new Entity();
         return new AbstractClassMapping(this, getMappingContext()) {
             @Override
-            public Object getMappedForm() {
-                return null;
+            public Entity getMappedForm() {
+
+                return e;
             }
 
             @Override
@@ -170,9 +168,8 @@ public class GrailsDomainClassPersistentEntity implements PersistentEntity {
                     public ClassMapping getClassMapping() {
                         return entity.getMapping();
                     }
-
-                    public Object getMappedForm() {
-                        return null;
+                    public Property getMappedForm() {
+                        return new Property();
                     }
                 };
             }
@@ -257,7 +254,6 @@ public class GrailsDomainClassPersistentEntity implements PersistentEntity {
             public PropertyMapping getMapping() {
                 return null;
             }
-
         };
         configureAssociation(grailsDomainClassProperty, oneToOne);
         return oneToOne;
@@ -270,7 +266,6 @@ public class GrailsDomainClassPersistentEntity implements PersistentEntity {
             public PropertyMapping getMapping() {
                 return null;
             }
-
         };
         configureAssociation(grailsDomainClassProperty, oneToOne);
         return oneToOne;
@@ -283,13 +278,12 @@ public class GrailsDomainClassPersistentEntity implements PersistentEntity {
             public PropertyMapping getMapping() {
                 return null;
             }
-
         };
         configureAssociation(grailsDomainClassProperty, oneToOne);
         return oneToOne;
     }
 
-    private Association createOneToMany(@SuppressWarnings("hiding") GrailsDomainClassMappingContext mappingContext,
+    private Association createOneToMany(GrailsDomainClassMappingContext mappingContext,
             GrailsDomainClassProperty grailsDomainClassProperty) {
         final OneToMany oneToMany = new OneToMany(this, mappingContext, grailsDomainClassProperty.getName(), grailsDomainClassProperty.getType()) {
 
@@ -310,14 +304,11 @@ public class GrailsDomainClassPersistentEntity implements PersistentEntity {
         association.setReferencedPropertyName(grailsDomainClassProperty.getReferencedPropertyName());
     }
 
-    private Association createEmbedded(
-            @SuppressWarnings("hiding") GrailsDomainClassMappingContext mappingContext,
-            GrailsDomainClassProperty grailsDomainClassProperty) {
+    private Association createEmbedded(GrailsDomainClassMappingContext mappingContext, GrailsDomainClassProperty grailsDomainClassProperty) {
         Embedded persistentProperty = new Embedded(this, mappingContext, grailsDomainClassProperty.getName(), grailsDomainClassProperty.getClass()) {
             public PropertyMapping getMapping() {
                 return null;
             }
-
         };
         persistentProperty.setOwningSide(grailsDomainClassProperty.isOwningSide());
         persistentProperty.setReferencedPropertyName(grailsDomainClassProperty.getReferencedPropertyName());

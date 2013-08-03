@@ -1,5 +1,6 @@
 package org.codehaus.groovy.grails.plugins.web
 
+import grails.util.Metadata
 import grails.util.MockHttpServletResponse
 import grails.web.CamelCaseUrlConverter
 import grails.web.UrlConverter
@@ -48,9 +49,8 @@ abstract class AbstractGrailsPluginTests extends GroovyTestCase {
         ctx = new MockApplicationContext()
         onSetUp()
         ga = new DefaultGrailsApplication(gcl.getLoadedClasses(),gcl)
-        def mainContext = new MockApplicationContext()
-        mainContext.registerMockBean UrlConverter.BEAN_NAME, new CamelCaseUrlConverter()
-        ga.mainContext = mainContext
+        ga.metadata[Metadata.APPLICATION_NAME] = getClass().name
+        ctx.registerMockBean UrlConverter.BEAN_NAME, new CamelCaseUrlConverter()
         mockManager = new MockGrailsPluginManager(ga)
         def dependentPlugins = pluginsToLoad.collect { new DefaultGrailsPlugin(it, ga)}
         dependentPlugins.each{ mockManager.registerMockPlugin(it); it.manager = mockManager }
@@ -73,6 +73,7 @@ abstract class AbstractGrailsPluginTests extends GroovyTestCase {
         dependentPlugins*.doWithRuntimeConfiguration(springConfig)
 
         appCtx = springConfig.getApplicationContext()
+        ga.mainContext = appCtx
         mockManager.applicationContext = appCtx
         servletContext.setAttribute(GrailsApplicationAttributes.APPLICATION_CONTEXT, appCtx)
         dependentPlugins*.doWithDynamicMethods(appCtx)

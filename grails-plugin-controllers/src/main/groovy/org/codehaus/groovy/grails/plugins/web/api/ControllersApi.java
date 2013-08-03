@@ -19,28 +19,47 @@ import grails.util.CollectionUtils;
 import grails.util.Environment;
 import grails.util.GrailsNameUtils;
 import groovy.lang.Closure;
+import groovy.lang.GroovyObject;
 
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.servlet.ServletRequest;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.collections.Predicate;
 import org.codehaus.groovy.grails.commons.ControllerArtefactHandler;
+import org.codehaus.groovy.grails.commons.DomainClassArtefactHandler;
+import org.codehaus.groovy.grails.commons.GrailsClassUtils;
+import org.codehaus.groovy.grails.commons.GrailsDomainClassProperty;
+import org.codehaus.groovy.grails.compiler.web.ControllerActionTransformer;
 import org.codehaus.groovy.grails.plugins.GrailsPluginManager;
+import org.codehaus.groovy.grails.web.binding.DataBindingUtils;
+import org.codehaus.groovy.grails.web.controllers.ControllerExceptionHandlerMetaData;
 import org.codehaus.groovy.grails.web.mapping.LinkGenerator;
-import org.codehaus.groovy.grails.web.metaclass.BindDynamicMethod;
 import org.codehaus.groovy.grails.web.metaclass.ChainMethod;
 import org.codehaus.groovy.grails.web.metaclass.ForwardMethod;
 import org.codehaus.groovy.grails.web.metaclass.RedirectDynamicMethod;
 import org.codehaus.groovy.grails.web.metaclass.RenderDynamicMethod;
 import org.codehaus.groovy.grails.web.metaclass.WithFormMethod;
+import org.codehaus.groovy.grails.web.plugins.support.WebMetaUtils;
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes;
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest;
 import org.codehaus.groovy.grails.web.servlet.mvc.RedirectEventListener;
+import org.codehaus.groovy.grails.web.servlet.mvc.exceptions.CannotRedirectException;
 import org.codehaus.groovy.runtime.DefaultGroovyMethods;
+import org.codehaus.groovy.runtime.InvokerHelper;
+import org.grails.databinding.CollectionDataBindingSource;
+import org.grails.databinding.DataBindingSource;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.context.ApplicationContext;
+import org.springframework.http.HttpMethod;
 import org.springframework.validation.Errors;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -55,6 +74,9 @@ import org.springframework.web.servlet.ModelAndView;
 @SuppressWarnings("rawtypes")
 public class ControllersApi extends CommonWebApi {
 
+    private static final String INCLUDE_MAP_KEY = "include";
+    private static final String EXCLUDE_MAP_KEY = "exclude";
+
     private static final long serialVersionUID = 1;
 
     protected static final String RENDER_METHOD_NAME = "render";
@@ -62,9 +84,8 @@ public class ControllersApi extends CommonWebApi {
     protected static final String SLASH = "/";
     protected transient RedirectDynamicMethod redirect;
     protected transient RenderDynamicMethod render;
-    protected transient BindDynamicMethod bind;
     protected transient WithFormMethod withFormMethod;
-    protected transient ForwardMethod forwardMethod = new ForwardMethod();
+    protected transient ForwardMethod forwardMethod;
 
     public ControllersApi() {
         this(null);
@@ -72,6 +93,10 @@ public class ControllersApi extends CommonWebApi {
 
     public ControllersApi(GrailsPluginManager pluginManager) {
         super(pluginManager);
+        redirect = new RedirectDynamicMethod();
+        render = new RenderDynamicMethod();
+        withFormMethod = new WithFormMethod();
+        forwardMethod = new ForwardMethod();
     }
 
     public static ApplicationContext getStaticApplicationContext() {
@@ -84,19 +109,19 @@ public class ControllersApi extends CommonWebApi {
     }
 
     public void setGspEncoding(String gspEncoding) {
-        getRenderMethod().setGspEncoding(gspEncoding);
+        render.setGspEncoding(gspEncoding);
     }
 
     public void setRedirectListeners(Collection<RedirectEventListener> redirectListeners) {
-        getRedirectMethod().setRedirectListeners(redirectListeners);
+        redirect.setRedirectListeners(redirectListeners);
     }
 
     public void setUseJessionId(boolean useJessionId) {
-        getRedirectMethod().setUseJessionId(useJessionId);
+        redirect.setUseJessionId(useJessionId);
     }
 
     public void setLinkGenerator(LinkGenerator linkGenerator) {
-        getRedirectMethod().setLinkGenerator(linkGenerator);
+        redirect.setLinkGenerator(linkGenerator);
     }
 
     /**
@@ -164,7 +189,7 @@ public class ControllersApi extends CommonWebApi {
      *
      * @param errors The error instance
      */
-    public void setErrors(@SuppressWarnings("unused") Object instance, Errors errors) {
+    public void setErrors(Object instance, Errors errors) {
         currentRequestAttributes().setAttribute(GrailsApplicationAttributes.ERRORS, errors, 0);
     }
 
@@ -173,7 +198,7 @@ public class ControllersApi extends CommonWebApi {
      *
      * @return The Errors instance
      */
-    public Errors getErrors(@SuppressWarnings("unused") Object instance) {
+    public Errors getErrors(Object instance) {
         return (Errors)currentRequestAttributes().getAttribute(GrailsApplicationAttributes.ERRORS, 0);
     }
 
@@ -182,7 +207,7 @@ public class ControllersApi extends CommonWebApi {
      *
      * @param mav The ModelAndView
      */
-    public void setModelAndView(@SuppressWarnings("unused") Object instance, ModelAndView mav) {
+    public void setModelAndView(Object instance, ModelAndView mav) {
         currentRequestAttributes().setAttribute(GrailsApplicationAttributes.MODEL_AND_VIEW, mav, 0);
     }
 
@@ -191,7 +216,7 @@ public class ControllersApi extends CommonWebApi {
      *
      * @return The ModelAndView
      */
-    public ModelAndView getModelAndView(@SuppressWarnings("unused") Object instance) {
+    public ModelAndView getModelAndView(Object instance) {
         return (ModelAndView)currentRequestAttributes().getAttribute(GrailsApplicationAttributes.MODEL_AND_VIEW, 0);
     }
 
@@ -219,7 +244,32 @@ public class ControllersApi extends CommonWebApi {
      * @return null
      */
     public Object redirect(Object instance,Map args) {
-        return getRedirectMethod().invoke(instance, "redirect", new Object[]{ args });
+        return redirect.invoke(instance, "redirect", new Object[]{ args });
+    }
+
+    /**
+     * Redirects for the given arguments.
+     *
+     * @param object A domain class
+     * @return null
+     */
+    public Object redirect(Object instance,Object object) {
+        if(object != null) {
+
+            Class<?> objectClass = object.getClass();
+            boolean isDomain = DomainClassArtefactHandler.isDomainClass(objectClass) && object instanceof GroovyObject;
+            if(isDomain) {
+
+                Object id = ((GroovyObject)object).getProperty(GrailsDomainClassProperty.IDENTITY);
+                if(id != null) {
+                    Map args = new HashMap();
+                    args.put(LinkGenerator.ATTRIBUTE_RESOURCE, object);
+                    args.put(LinkGenerator.ATTRIBUTE_METHOD, HttpMethod.GET.toString());
+                    return redirect(instance, args);
+                }
+            }
+        }
+        throw new CannotRedirectException("Cannot redirect for object ["+object+"] it is not a domain or has no identifier. Use an explicit redirect instead ");
     }
 
     /**
@@ -255,36 +305,52 @@ public class ControllersApi extends CommonWebApi {
     }
 
     protected Object invokeRender(Object instance, Object... args) {
-        return getRenderMethod().invoke(instance, RENDER_METHOD_NAME, args);
+        return render.invoke(instance, RENDER_METHOD_NAME, args);
     }
 
-    // the bindData method
-    public Object bindData(Object instance, Object target, Object args) {
-        return invokeBindData(instance, target, args);
+    public Object bindData(Object instance, Object target, Object bindingSource, final List excludes) {
+        return bindData(instance, target, bindingSource, CollectionUtils.newMap(EXCLUDE_MAP_KEY, excludes), null);
     }
 
-    public Object bindData(Object instance, Object target, Object args, final List disallowed) {
-        return invokeBindData(instance, target, args, CollectionUtils.newMap("exclude", disallowed));
+    public Object bindData(Object instance, Object target, Object bindingSource, final List excludes, String filter) {
+        return bindData(instance, target, bindingSource, CollectionUtils.newMap(EXCLUDE_MAP_KEY, excludes), filter);
     }
 
-    public Object bindData(Object instance, Object target, Object args, final List disallowed, String filter) {
-        return invokeBindData(instance, target, args, CollectionUtils.newMap("exclude", disallowed), filter);
+    public Object bindData(Object instance, Object target, Object bindingSource, Map includeExclude) {
+        return bindData(instance, target, bindingSource, includeExclude, null);
     }
 
-    public Object bindData(Object instance, Object target, Object args, Map includeExclude) {
-        return invokeBindData(instance, target, args, includeExclude);
+    public Object bindData(Object instance, Object target, Object bindingSource, String filter) {
+        return bindData(instance, target, bindingSource, Collections.EMPTY_MAP, filter);
     }
 
-    public Object bindData(Object instance, Object target, Object args, Map includeExclude, String filter) {
-        return invokeBindData(instance, target, args, includeExclude, filter);
+    public Object bindData(Object instance, Object target, Object bindingSource) {
+        return bindData(instance, target, bindingSource, Collections.EMPTY_MAP, null);
     }
 
-    public Object bindData(Object instance, Object target, Object args, String filter) {
-        return invokeBindData(instance, target, args, filter);
+    public Object bindData(Object instance, Object target, Object bindingSource, Map includeExclude, String filter) {
+        List include = convertToListIfString(includeExclude.get(INCLUDE_MAP_KEY));
+        List exclude = convertToListIfString(includeExclude.get(EXCLUDE_MAP_KEY));
+        DataBindingUtils.bindObjectToInstance(target, bindingSource, include, exclude, filter);
+        return target;
     }
 
-    protected Object invokeBindData(Object instance, Object... args) {
-        return getBindMethod().invoke(instance, BIND_DATA_METHOD, args);
+    public <T> void bindData(Object instance, Class<T> targetType, Collection<T> collectionToPopulate, ServletRequest request) throws Exception {
+        DataBindingUtils.bindToCollection(targetType, collectionToPopulate, request);
+    }
+
+    public <T> void bindData(Object instance, Class<T> targetType, Collection<T> collectionToPopulate, CollectionDataBindingSource collectionBindingSource) throws Exception {
+        DataBindingUtils.bindToCollection(targetType, collectionToPopulate, collectionBindingSource);
+    }
+
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    private List convertToListIfString(Object o) {
+        if (o instanceof String) {
+            List list = new ArrayList();
+            list.add(o);
+            o = list;
+        }
+        return (List) o;
     }
 
     /**
@@ -313,7 +379,7 @@ public class ControllersApi extends CommonWebApi {
      * @return The result of the closure execution
      */
     public Object withForm(Object instance, Closure callable) {
-        return getWithFormMethod().withForm(getWebRequest(instance), callable);
+        return withFormMethod.withForm(getWebRequest(instance), callable);
     }
 
     /**
@@ -324,41 +390,106 @@ public class ControllersApi extends CommonWebApi {
      * @return The forwarded URL
      */
     public String forward(Object instance, Map params) {
-        return getForwardMethod().forward(getRequest(instance), getResponse(instance), params);
+        return forwardMethod.forward(getRequest(instance), getResponse(instance), params);
     }
 
-    protected RedirectDynamicMethod getRedirectMethod() {
-        if (redirect == null) {
-            redirect = new RedirectDynamicMethod();
+    /**
+     * Initializes a command object.
+     *
+     * If type is a domain class and the request body or parameters include an id, the id is used to retrieve
+     * the command object instance from the database, otherwise the no-arg constructor on type is invoke.  If
+     * an attempt is made to retrieve the command object instance from the database and no corresponding
+     * record is found, null is returned.
+     *
+     * The command object is then subjected to data binding and dependency injection before being returned.
+     *
+     *
+     * @param controllerInstance The controller instance
+     * @param type The type of the command object
+     * @return the initialized command object or null if the command object is a domain class, the body or
+     * parameters included an id and no corresponding record was found in the database.
+     */
+    public Object initializeCommandObject(final Object controllerInstance, final Class type) throws Exception {
+        final HttpServletRequest request = getRequest(controllerInstance);
+        final DataBindingSource dataBindingSource = DataBindingUtils.createDataBindingSource(getGrailsApplication(controllerInstance), type, request);
+        final DataBindingSource commandObjectBindingSource = WebMetaUtils.getCommandObjectBindingSource(type, dataBindingSource);
+        final Object commandObjectInstance;
+        Object entityIdentifierValue = null;
+        if(DomainClassArtefactHandler.isDomainClass(type)) {
+            entityIdentifierValue = commandObjectBindingSource.getIdentifierValue();
+            if(entityIdentifierValue == null) {
+                final GrailsWebRequest webRequest = GrailsWebRequest.lookup(request);
+                entityIdentifierValue = webRequest != null ? webRequest.getParams().getIdentifier() : null;
+            }
         }
-        return redirect;
-    }
+        if(entityIdentifierValue != null) {
+            commandObjectInstance = InvokerHelper.invokeStaticMethod(type, "get", entityIdentifierValue);
+        } else {
+            commandObjectInstance = type.newInstance();
+        }
 
-    protected RenderDynamicMethod getRenderMethod() {
-        if (render == null) {
-            render = new RenderDynamicMethod();
-        }
-        return render;
-    }
+        if(commandObjectInstance != null) {
+            final boolean shouldDoDataBinding;
 
-    protected BindDynamicMethod getBindMethod() {
-        if (bind == null) {
-            bind = new BindDynamicMethod();
-        }
-        return bind;
-    }
+            if(entityIdentifierValue != null) {
+                final HttpMethod requestMethod = HttpMethod.valueOf(request.getMethod());
+                switch(requestMethod) {
+                    case PATCH:
+                    case POST:
+                    case PUT:
+                        shouldDoDataBinding = true;
+                        break;
+                    default:
+                        shouldDoDataBinding = false;
+                }
+            } else {
+                shouldDoDataBinding = true;
+            }
 
-    protected WithFormMethod getWithFormMethod() {
-        if (withFormMethod == null) {
-            withFormMethod = new WithFormMethod();
-        }
-        return withFormMethod;
-    }
+            if(shouldDoDataBinding) {
+                bindData(controllerInstance, commandObjectInstance, commandObjectBindingSource, Collections.EMPTY_MAP, null);
+            }
 
-    protected ForwardMethod getForwardMethod() {
-        if (forwardMethod == null) {
-            forwardMethod = new ForwardMethod();
+            final ApplicationContext applicationContext = getApplicationContext(controllerInstance);
+            final AutowireCapableBeanFactory autowireCapableBeanFactory = applicationContext.getAutowireCapableBeanFactory();
+            autowireCapableBeanFactory.autowireBeanProperties(commandObjectInstance, AutowireCapableBeanFactory.AUTOWIRE_BY_NAME, false);
         }
-        return forwardMethod;
+        return commandObjectInstance;
+    }
+    
+    @SuppressWarnings("unchecked")
+    public Method getExceptionHandlerMethodFor(final Object controllerInstance, final Class<? extends Exception> exceptionType) throws Exception {
+        if(!Exception.class.isAssignableFrom(exceptionType)) {
+            throw new IllegalArgumentException("exceptionType [" + exceptionType.getName() + "] argument must be Exception or a subclass of Exception");
+        }
+        Method handlerMethod = null;
+        final List<ControllerExceptionHandlerMetaData> exceptionHandlerMetaDataInstances = (List<ControllerExceptionHandlerMetaData>) GrailsClassUtils.getStaticFieldValue(controllerInstance.getClass(), ControllerActionTransformer.EXCEPTION_HANDLER_META_DATA_FIELD_NAME);
+        if(exceptionHandlerMetaDataInstances != null && exceptionHandlerMetaDataInstances.size() > 0) {
+            
+            // find all of the handler methods which could accept this exception type
+            final List<ControllerExceptionHandlerMetaData> matches = (List<ControllerExceptionHandlerMetaData>) org.apache.commons.collections.CollectionUtils.select(exceptionHandlerMetaDataInstances, new Predicate() {
+                @Override
+                public boolean evaluate(Object object) {
+                    ControllerExceptionHandlerMetaData md = (ControllerExceptionHandlerMetaData) object;
+                    return md.getExceptionType().isAssignableFrom(exceptionType);
+                }
+            });
+            
+            
+            if(matches.size() > 0) {
+                ControllerExceptionHandlerMetaData theOne = matches.get(0);
+                
+                // if there are more than 1, find the one that is farthest down the inheritance hierarchy
+                for(int i = 1; i < matches.size(); i++) {
+                    final ControllerExceptionHandlerMetaData nextMatch = matches.get(i);
+                    if(theOne.getExceptionType().isAssignableFrom(nextMatch.getExceptionType())) {
+                        theOne = nextMatch;
+                    }
+                }
+                handlerMethod = controllerInstance.getClass().getMethod(theOne.getMethodName(), theOne.getExceptionType());
+            }
+        }
+        
+        return handlerMethod;
     }
 }

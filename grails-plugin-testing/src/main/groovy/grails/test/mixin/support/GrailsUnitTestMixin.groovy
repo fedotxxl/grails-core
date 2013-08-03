@@ -15,36 +15,45 @@
  */
 package grails.test.mixin.support
 
+import grails.async.Promises
 import grails.spring.BeanBuilder
 import grails.test.GrailsMock
 import grails.test.MockUtils
-import grails.util.GrailsNameUtils
+import grails.util.Holders
+import grails.util.Metadata
 import grails.validation.DeferredBindingActions
 import grails.web.CamelCaseUrlConverter
 import grails.web.UrlConverter
+import groovy.transform.CompileStatic
 import junit.framework.AssertionFailedError
 
+import org.codehaus.groovy.grails.cli.support.MetaClassRegistryCleaner
 import org.codehaus.groovy.grails.commons.ClassPropertyFetcher
+import org.codehaus.groovy.grails.commons.CodecArtefactHandler
 import org.codehaus.groovy.grails.commons.DefaultGrailsApplication
+import org.codehaus.groovy.grails.commons.DefaultGrailsCodecClass
 import org.codehaus.groovy.grails.commons.GrailsApplication
 import org.codehaus.groovy.grails.commons.spring.GrailsWebApplicationContext
 import org.codehaus.groovy.grails.lifecycle.ShutdownOperations
+import org.codehaus.groovy.grails.plugins.DefaultGrailsPluginManager
+import org.codehaus.groovy.grails.plugins.databinding.DataBindingGrailsPlugin
 import org.codehaus.groovy.grails.plugins.support.aware.GrailsApplicationAwareBeanPostProcessor
-import org.codehaus.groovy.grails.support.MockApplicationContext
 import org.codehaus.groovy.grails.support.proxy.DefaultProxyHandler
 import org.codehaus.groovy.grails.validation.ConstraintEvalUtils
 import org.codehaus.groovy.grails.validation.ConstraintsEvaluator
 import org.codehaus.groovy.grails.validation.DefaultConstraintEvaluator
 import org.codehaus.groovy.runtime.ScriptBytecodeAdapter
+import org.grails.async.factory.SynchronousPromiseFactory
 import org.junit.After
 import org.junit.AfterClass
 import org.junit.BeforeClass
-import org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor
-import org.springframework.context.support.StaticMessageSource
-import org.codehaus.groovy.grails.plugins.DefaultGrailsPluginManager
-import org.springframework.context.MessageSource
-import org.codehaus.groovy.grails.cli.support.MetaClassRegistryCleaner
 import org.springframework.beans.CachedIntrospectionResults
+import org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor
+import org.springframework.context.MessageSource
+import org.springframework.context.support.ConversionServiceFactoryBean
+import org.springframework.context.support.StaticMessageSource
+import org.springframework.mock.web.MockServletContext
+import org.springframework.web.context.WebApplicationContext
 
 /**
  * A base unit testing mixin that watches for MetaClass changes and unbinds them on tear down.
@@ -64,38 +73,39 @@ class GrailsUnitTestMixin {
     static ConfigObject config
     static MessageSource messageSource
 
-    private static metaClassRegistryListener = MetaClassRegistryCleaner.createAndRegister()
+    private static MetaClassRegistryCleaner metaClassRegistryListener = MetaClassRegistryCleaner.createAndRegister()
 
     Map validationErrorsMap = new IdentityHashMap()
     Set loadedCodecs = []
 
+    @CompileStatic
     static void defineBeans(Closure callable) {
         def bb = new BeanBuilder()
+        def binding = new Binding()
+        binding.setVariable "application", grailsApplication
+        bb.setBinding binding
         def beans = bb.beans(callable)
         beans.registerBeans(applicationContext)
     }
 
     @BeforeClass
+    @CompileStatic
     static void initGrailsApplication() {
         ClassPropertyFetcher.clearClassPropertyFetcherCache()
         CachedIntrospectionResults.clearClassLoader(GrailsUnitTestMixin.class.classLoader)
         registerMetaClassRegistryWatcher()
+        Promises.promiseFactory = new SynchronousPromiseFactory()
         if (applicationContext == null) {
             ExpandoMetaClass.enableGlobally()
             applicationContext = new GrailsWebApplicationContext()
             final autowiringPostProcessor = new AutowiredAnnotationBeanPostProcessor()
-            autowiringPostProcessor.beanFactory = applicationContext.autowireCapableBeanFactory
+            autowiringPostProcessor.setBeanFactory( applicationContext.autowireCapableBeanFactory )
             applicationContext.beanFactory.addBeanPostProcessor(autowiringPostProcessor)
 
-            defineBeans {
-                grailsProxyHandler(DefaultProxyHandler)
-                grailsApplication(DefaultGrailsApplication)
-                pluginManager(DefaultGrailsPluginManager, [] as Class[], ref("grailsApplication"))
-                messageSource(StaticMessageSource)
-                "${ConstraintsEvaluator.BEAN_NAME}"(DefaultConstraintEvaluator)
-            }
+            registerBeans()
             applicationContext.refresh()
             grailsApplication = applicationContext.getBean(GrailsApplication.APPLICATION_ID, GrailsApplication)
+            grailsApplication.metadata[Metadata.APPLICATION_NAME] =  GrailsUnitTestMixin.simpleName
             applicationContext.beanFactory.addBeanPostProcessor(new GrailsApplicationAwareBeanPostProcessor(grailsApplication))
             messageSource = applicationContext.getBean("messageSource", MessageSource)
 
@@ -104,9 +114,25 @@ class GrailsUnitTestMixin {
             mainContext.refresh()
             grailsApplication.mainContext = mainContext
             grailsApplication.initialise()
+            def servletContext = new MockServletContext()
+            servletContext.setAttribute WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE, mainContext
+            Holders.setServletContext servletContext
 
             grailsApplication.applicationContext = applicationContext
             config = grailsApplication.config
+        }
+    }
+
+    protected static void registerBeans() {
+        defineBeans(new DataBindingGrailsPlugin().doWithSpring)
+
+        defineBeans {
+            grailsProxyHandler(DefaultProxyHandler)
+            grailsApplication(DefaultGrailsApplication)
+            pluginManager(DefaultGrailsPluginManager, [] as Class[], ref("grailsApplication"))
+            messageSource(StaticMessageSource)
+            "${ConstraintsEvaluator.BEAN_NAME}"(DefaultConstraintEvaluator)
+            conversionService(ConversionServiceFactoryBean)
         }
     }
 
@@ -118,17 +144,20 @@ class GrailsUnitTestMixin {
         cleanupModifiedMetaClasses()
     }
 
+    @CompileStatic
     static void registerMetaClassRegistryWatcher() {
         GroovySystem.metaClassRegistry.addMetaClassRegistryChangeEventListener metaClassRegistryListener
     }
 
-
+    @CompileStatic
     static void cleanupModifiedMetaClasses() {
         metaClassRegistryListener.clean()
     }
 
     @AfterClass
+    @CompileStatic
     static void deregisterMetaClassCleaner() {
+        Promises.promiseFactory = null
         GroovySystem.metaClassRegistry.removeMetaClassRegistryChangeEventListener(metaClassRegistryListener)
     }
 
@@ -137,6 +166,7 @@ class GrailsUnitTestMixin {
      * so that a "validate()" method is added. This can then be used
      * to test the constraints on the class.
      */
+    @CompileStatic
     void mockForConstraintsTests(Class clazz, List instances = []) {
         ConstraintEvalUtils.clearDefaultConstraints()
         MockUtils.prepareForConstraintsTests(clazz, validationErrorsMap, instances, ConstraintEvalUtils.getDefaultConstraints(grailsApplication.config))
@@ -160,6 +190,7 @@ class GrailsUnitTestMixin {
      * @param code
      * @return the message of the thrown Throwable
      */
+    @CompileStatic
     String shouldFail(Closure code) {
         boolean failed = false
         String result = null
@@ -200,17 +231,21 @@ class GrailsUnitTestMixin {
         }
 
         if (th == null) {
-            throw new AssertionFailedError("Closure " + code + " should have failed with an exception of type " + clazz.getName())
-        } else if (!clazz.isInstance(th)) {
-            throw new AssertionFailedError("Closure " + code + " should have failed with an exception of type " + clazz.getName() + ", instead got Exception " + th);
+            throw new AssertionFailedError("Closure $code should have failed with an exception of type $clazz.name")
         }
-        return th.getMessage();
+
+        if (!clazz.isInstance(th)) {
+            throw new AssertionFailedError("Closure $code should have failed with an exception of type $clazz.name, instead got Exception $th")
+        }
+
+        return th.message
     }
     /**
      * Loads the given codec, adding the "encodeAs...()" and "decode...()"
      * methods to objects.
      * @param codecClass The codec to load, e.g. HTMLCodec.
      */
+    @CompileStatic
     void mockCodec(Class codecClass) {
         if (loadedCodecs.contains(codecClass)) {
             return
@@ -218,18 +253,15 @@ class GrailsUnitTestMixin {
 
         loadedCodecs << codecClass
 
-        // Instantiate the codec so we can use it.
-        final codec = codecClass.newInstance()
-
-        // Add the encode and decode methods.
-        def codecName = GrailsNameUtils.getLogicalName(codecClass, "Codec")
-        Object.metaClass."encodeAs$codecName" = { -> codec.encode(delegate) }
-        Object.metaClass."decode$codecName" = { -> codec.decode(delegate) }
+        DefaultGrailsCodecClass grailsCodecClass = new DefaultGrailsCodecClass(codecClass)
+        grailsCodecClass.configureCodecMethods()
+        if(grailsApplication != null) {
+            grailsApplication.addArtefact(CodecArtefactHandler.TYPE, grailsCodecClass)
+        }
     }
 
-
-
     @AfterClass
+    @CompileStatic
     static void shutdownApplicationContext() {
         if (applicationContext.isActive()) {
             applicationContext.close()
@@ -239,5 +271,6 @@ class GrailsUnitTestMixin {
 
         applicationContext = null
         grailsApplication = null
+        Holders.setServletContext null
     }
 }

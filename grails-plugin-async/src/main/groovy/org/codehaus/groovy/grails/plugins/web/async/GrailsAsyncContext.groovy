@@ -15,6 +15,8 @@
  */
 package org.codehaus.groovy.grails.plugins.web.async
 
+import groovy.transform.CompileStatic
+
 import javax.servlet.AsyncContext
 import javax.servlet.AsyncListener
 
@@ -22,10 +24,12 @@ import org.codehaus.groovy.grails.support.PersistenceContextInterceptor
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
 import org.codehaus.groovy.grails.web.sitemesh.GrailsContentBufferingResponse
 import org.codehaus.groovy.grails.web.sitemesh.GroovyPageLayoutFinder
-import org.codehaus.groovy.grails.web.sitemesh.SpringMVCViewDecorator
 import org.codehaus.groovy.grails.web.util.WebUtils
 
-import com.opensymphony.sitemesh.webapp.SiteMeshWebAppContext;
+import com.opensymphony.sitemesh.webapp.SiteMeshWebAppContext
+
+import javax.servlet.http.HttpServletRequest
+import javax.servlet.http.HttpServletResponse
 
 /**
  * Wraps an AsyncContext providing additional logic to provide the appropriate context to a Grails application.
@@ -56,7 +60,7 @@ class GrailsAsyncContext implements AsyncContext {
 
     void start(Runnable runnable) {
         delegate.start {
-            GrailsWebRequest webRequest = new GrailsWebRequest(request, response, request.getServletContext())
+            GrailsWebRequest webRequest = new GrailsWebRequest((HttpServletRequest)request, (HttpServletResponse)response, request.getServletContext())
             WebUtils.storeGrailsWebRequest(webRequest)
             def interceptors = getPersistenceInterceptors(webRequest)
 
@@ -65,10 +69,6 @@ class GrailsAsyncContext implements AsyncContext {
             }
             try {
                 runnable.run()
-
-                for (PersistenceContextInterceptor i in interceptors) {
-                    i.flush()
-                }
             } finally {
                 for (PersistenceContextInterceptor i in interceptors) {
                     i.destroy()
@@ -84,11 +84,12 @@ class GrailsAsyncContext implements AsyncContext {
             GrailsContentBufferingResponse bufferingResponse = (GrailsContentBufferingResponse) response
             def targetResponse = bufferingResponse.getTargetResponse()
             def content = bufferingResponse.getContent()
-            if (content != null) {
-                def decorator = groovyPageLayoutFinder?.findLayout(request, content)
+            final httpRequest = (HttpServletRequest) request
+            if (content != null && groovyPageLayoutFinder != null) {
+                com.opensymphony.sitemesh.Decorator decorator = (com.opensymphony.sitemesh.Decorator)groovyPageLayoutFinder?.findLayout(httpRequest, content)
                 if (decorator) {
                     decorator.render content,
-                        new SiteMeshWebAppContext(request, targetResponse, request.servletContext)
+                        new SiteMeshWebAppContext(httpRequest, targetResponse, request.servletContext)
                 } else {
                    content.writeOriginal(targetResponse.getWriter())
                 }
@@ -99,7 +100,7 @@ class GrailsAsyncContext implements AsyncContext {
 
     protected Collection<PersistenceContextInterceptor> getPersistenceInterceptors(GrailsWebRequest webRequest) {
         def servletContext = webRequest.servletContext
-        def interceptors = servletContext?.getAttribute(PERSISTENCE_INTERCEPTORS)
+        Collection<PersistenceContextInterceptor> interceptors = (Collection<PersistenceContextInterceptor>)servletContext?.getAttribute(PERSISTENCE_INTERCEPTORS)
         if (interceptors == null) {
             interceptors = webRequest.applicationContext?.getBeansOfType(PersistenceContextInterceptor)?.values() ?: []
             servletContext.setAttribute(PERSISTENCE_INTERCEPTORS, interceptors)

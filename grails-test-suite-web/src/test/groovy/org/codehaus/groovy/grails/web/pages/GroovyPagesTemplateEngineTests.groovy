@@ -5,7 +5,6 @@ import grails.util.GrailsWebUtil
 
 import org.codehaus.groovy.grails.commons.GrailsApplication
 import org.codehaus.groovy.grails.commons.GrailsClass
-import org.codehaus.groovy.grails.plugins.MockGrailsPluginManager;
 import org.codehaus.groovy.grails.support.MockStringResourceLoader
 import org.springframework.core.io.ByteArrayResource
 import org.springframework.core.io.UrlResource
@@ -80,7 +79,6 @@ class GroovyPagesTemplateEngineTests extends GroovyTestCase {
     void testCreateTemplateFromCurrentRequest2() {
         def webRequest = GrailsWebUtil.bindMockWebRequest()
 
-
         def uri1 = "/another"
         assertNotNull(webRequest.request)
         webRequest.request.requestURI = "/another"
@@ -88,7 +86,6 @@ class GroovyPagesTemplateEngineTests extends GroovyTestCase {
 
         def rl = new MockStringResourceLoader()
         rl.registerMockResource(uri1, "<%='success 2'%>")
-
 
         def gpte = new GroovyPagesTemplateEngine(new MockServletContext(rl))
         gpte.afterPropertiesSet()
@@ -299,7 +296,6 @@ class GroovyPagesTemplateEngineTests extends GroovyTestCase {
 
         assertEquals "hello", sw.toString()
     }
-
 
     void testParsingMultilineQuotes() {
         GrailsWebUtil.bindMockWebRequest()

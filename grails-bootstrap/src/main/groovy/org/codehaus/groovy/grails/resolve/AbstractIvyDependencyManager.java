@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,13 +55,20 @@ public abstract class AbstractIvyDependencyManager {
 
     /*
      * Out of the box Ivy configurations are:
-     *
+
+     * - agent: Used to configure the JVM agent
      * - build: Dependencies for the build system only
      * - compile: Dependencies for the compile step
      * - runtime: Dependencies needed at runtime but not for compilation (see above)
      * - test: Dependencies needed for testing but not at runtime (see above)
      * - provided: Dependencies needed at development time, but not during WAR deployment
      */
+    public static Configuration AGENT_CONFIGURATION  = new Configuration(
+        "agent",
+        Configuration.Visibility.PUBLIC,
+        "Agent dependencies",
+        new String[] {"default"},
+        true, null);
     public static Configuration BUILD_CONFIGURATION  = new Configuration(
             "build",
             Configuration.Visibility.PUBLIC,
@@ -116,6 +124,7 @@ public abstract class AbstractIvyDependencyManager {
     Map<String, List<String>> configurationMappings = CollectionUtils.<String, List<String>>newMap(
        "runtime", Arrays.asList("default"),
        "build", Arrays.asList("default"),
+       "agent", Arrays.asList("default"),
        "compile", Arrays.asList("default"),
        "provided", Arrays.asList("default"),
        "docs", Arrays.asList("default"),
@@ -695,7 +704,7 @@ public abstract class AbstractIvyDependencyManager {
         }
 
         String org = descriptor.getDependencyId().getOrganisation();
-        if(!pluginDep && !"org.grails".equals(org) && !"org.springframework.uaa".equals(org)) {
+        if (!pluginDep && !"org.grails".equals(org) && !"org.springframework.uaa".equals(org)) {
             mappings = new ArrayList<String>(mappings);
 
             if (includeJavadoc) {
@@ -731,12 +740,12 @@ public abstract class AbstractIvyDependencyManager {
         //
         //    http://jira.codehaus.org/browse/GRAILS-6270
         //
-        @SuppressWarnings("hiding")
         DefaultModuleDescriptor moduleDescriptor =
             DefaultModuleDescriptor.newDefaultInstance(ModuleRevisionId.newInstance(
                     "org.grails.internal", applicationName, applicationVersion));
 
         // TODO: make configurations extensible
+        moduleDescriptor.addConfiguration(AGENT_CONFIGURATION);
         moduleDescriptor.addConfiguration(BUILD_CONFIGURATION);
         moduleDescriptor.addConfiguration(COMPILE_CONFIGURATION);
         moduleDescriptor.addConfiguration(RUNTIME_CONFIGURATION);

@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,8 +54,6 @@ public class GrailsDomainClassValidator implements CascadingValidator, GrailsApp
     protected MessageSource messageSource;
     protected GrailsApplication grailsApplication;
 
-
-
     @SuppressWarnings("rawtypes")
     public boolean supports(Class clazz) {
         return targetClass.equals(clazz);
@@ -108,7 +107,6 @@ public class GrailsDomainClassValidator implements CascadingValidator, GrailsApp
      * @param obj  The object to validate
      * @param errors The Errors object
      */
-    @SuppressWarnings("unused")
     protected void postValidate(Object obj, Errors errors) {
         // do nothing
     }
@@ -232,7 +230,7 @@ public class GrailsDomainClassValidator implements CascadingValidator, GrailsApp
 
         GrailsDomainClass associatedDomainClass = getAssociatedDomainClass(associatedObject, persistentProperty);
 
-        if (associatedDomainClass == null || !isOwningInstance(bean, associatedDomainClass)) {
+        if (associatedDomainClass == null || !isOwningInstance(bean, associatedDomainClass) && !persistentProperty.isExplicitSaveUpdateCascade()) {
             return;
         }
 

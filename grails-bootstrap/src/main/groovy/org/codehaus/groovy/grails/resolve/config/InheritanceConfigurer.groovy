@@ -1,4 +1,5 @@
-/* Copyright 2011 the original author or authors.
+/*
+ * Copyright 2011 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +15,11 @@
  */
 package org.codehaus.groovy.grails.resolve.config
 
-import org.apache.ivy.core.module.id.ModuleId
-import org.apache.ivy.core.module.id.ArtifactId
 import org.apache.ivy.core.module.descriptor.DefaultExcludeRule
-
-import org.apache.ivy.plugins.matcher.PatternMatcher
+import org.apache.ivy.core.module.id.ArtifactId
+import org.apache.ivy.core.module.id.ModuleId
 import org.apache.ivy.plugins.matcher.ExactPatternMatcher
+import org.apache.ivy.plugins.matcher.PatternMatcher
 
 class InheritanceConfigurer extends AbstractDependencyManagementConfigurer {
 
@@ -46,5 +46,4 @@ class InheritanceConfigurer extends AbstractDependencyManagementConfigurer {
             excludes(name: exclude)
         }
     }
-
 }

@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +15,11 @@
  */
 package org.codehaus.groovy.grails.plugins
 
-import grails.util.BuildSettings;
+import grails.util.BuildSettings
 import grails.util.BuildSettingsHolder
 import grails.util.PluginBuildSettings
 import groovy.util.slurpersupport.GPathResult
+
 import org.codehaus.groovy.grails.io.support.Resource
 
 /**
@@ -312,4 +314,3 @@ class GrailsPluginUtils {
         INSTANCE = null
     }
 }
-

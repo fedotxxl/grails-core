@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +19,10 @@ import java.io.Reader;
 
 import org.codehaus.groovy.grails.web.util.GrailsPrintWriterAdapter;
 import org.codehaus.groovy.grails.web.util.StreamCharBuffer;
+import org.objenesis.ObjenesisStd;
+import org.objenesis.instantiator.ObjectInstantiator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Fast in-memory PrintWriter implementation.
@@ -26,8 +31,18 @@ import org.codehaus.groovy.grails.web.util.StreamCharBuffer;
  * @since 2.0
  */
 public class FastStringPrintWriter extends GrailsPrintWriterAdapter {
+    private static final Logger LOG = LoggerFactory.getLogger(FastStringPrintWriter.class);
 
-    private final StreamCharBuffer streamBuffer;
+    private static ObjectInstantiator instantiator;
+    static {
+        try {
+            instantiator = new ObjenesisStd(false).getInstantiatorOf(FastStringPrintWriter.class);
+        } catch (Exception e) {
+            LOG.debug("Couldn't get direct performance optimized instantiator for FastStringPrintWriter. Using default instantiation.", e);
+        }
+    }
+
+    private StreamCharBuffer streamBuffer;
 
     public FastStringPrintWriter() {
         super(new StreamCharBuffer().getWriter());
@@ -37,6 +52,28 @@ public class FastStringPrintWriter extends GrailsPrintWriterAdapter {
     public FastStringPrintWriter(int initialChunkSize) {
         super(new StreamCharBuffer(initialChunkSize).getWriter());
         streamBuffer = ((StreamCharBuffer.StreamCharBufferWriter) getOut()).getBuffer();
+    }
+
+    public static FastStringPrintWriter newInstance() {
+        return newInstance(0);
+    }
+
+    public static FastStringPrintWriter newInstance(int initialChunkSize) {
+        if (instantiator == null) {
+            if (initialChunkSize > 0) {
+                return new FastStringPrintWriter(initialChunkSize);
+            }
+            return new FastStringPrintWriter();
+        }
+
+        FastStringPrintWriter instance = (FastStringPrintWriter)instantiator.newInstance();
+        if (initialChunkSize > 0) {
+            instance.streamBuffer = new StreamCharBuffer(initialChunkSize);
+        } else {
+            instance.streamBuffer = new StreamCharBuffer();
+        }
+        instance.setTarget(instance.streamBuffer.getWriter());
+        return instance;
     }
 
     protected FastStringPrintWriter(Object o) {

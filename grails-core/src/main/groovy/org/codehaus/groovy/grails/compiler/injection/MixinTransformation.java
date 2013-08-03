@@ -13,13 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.compiler.injection;
 
 import grails.util.GrailsNameUtils;
 import grails.util.Mixin;
 import groovy.lang.GroovyObjectSupport;
-import org.codehaus.groovy.ast.*;
+
+import java.lang.reflect.Modifier;
+import java.util.List;
+
+import org.codehaus.groovy.ast.ASTNode;
+import org.codehaus.groovy.ast.AnnotatedNode;
+import org.codehaus.groovy.ast.AnnotationNode;
+import org.codehaus.groovy.ast.ClassNode;
+import org.codehaus.groovy.ast.MethodNode;
 import org.codehaus.groovy.ast.expr.ClassExpression;
 import org.codehaus.groovy.ast.expr.Expression;
 import org.codehaus.groovy.ast.expr.ListExpression;
@@ -28,9 +35,6 @@ import org.codehaus.groovy.control.CompilePhase;
 import org.codehaus.groovy.control.SourceUnit;
 import org.codehaus.groovy.transform.ASTTransformation;
 import org.codehaus.groovy.transform.GroovyASTTransformation;
-
-import java.lang.reflect.Modifier;
-import java.util.List;
 
 /**
  * The logic for the {@link grails.util.Mixin} location transform.
@@ -88,10 +92,10 @@ public class MixinTransformation implements ASTTransformation {
                         for (MethodNode mixinMethod : mixinMethods) {
                             if (isCandidateMethod(mixinMethod) && !hasDeclaredMethod(classNode, mixinMethod)) {
                                 if (mixinMethod.isStatic()) {
-                                    MethodNode methodNode = GrailsASTUtils.addDelegateStaticMethod(classNode, mixinMethod);
+                                    /*MethodNode methodNode =*/ GrailsASTUtils.addDelegateStaticMethod(classNode, mixinMethod);
                                 }
                                 else {
-                                    MethodNode methodNode = GrailsASTUtils.addDelegateInstanceMethod(classNode, fieldReference, mixinMethod, false);
+                                    /*MethodNode methodNode =*/ GrailsASTUtils.addDelegateInstanceMethod(classNode, fieldReference, mixinMethod, false);
                                 }
                             }
                         }
@@ -132,6 +136,4 @@ public class MixinTransformation implements ASTTransformation {
             !Modifier.isAbstract(declaredMethod.getModifiers()) &&
             !groovyMethods.hasMethod(declaredMethod.getName(), declaredMethod.getParameters());
     }
-
 }
-

@@ -15,6 +15,7 @@
  */
 package org.codehaus.groovy.grails.compiler.injection;
 
+import grails.artefact.Artefact;
 import grails.build.logging.GrailsConsole;
 
 import java.lang.reflect.Modifier;
@@ -53,6 +54,7 @@ public class DefaultGrailsDomainClassInjector implements GrailsDomainClassInject
 
     public void performInjection(SourceUnit source, GeneratorContext context, ClassNode classNode) {
         if (GrailsASTUtils.isDomainClass(classNode, source) && shouldInjectClass(classNode)) {
+            if(!classNode.getAnnotations(new ClassNode(Artefact.class)).isEmpty()) return;
             performInjectionOnAnnotatedEntity(classNode);
         }
     }
@@ -230,7 +232,11 @@ public class DefaultGrailsDomainClassInjector implements GrailsDomainClassInject
         performInjection(source, null, classNode);
     }
 
-    @Override
+
+    public void performInjectionOnAnnotatedClass(SourceUnit source, ClassNode classNode) {
+        performInjectionOnAnnotatedEntity(classNode);
+    }
+
     public String[] getArtefactTypes() {
         return new String[] {DomainClassArtefactHandler.TYPE};
     }

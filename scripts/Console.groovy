@@ -22,68 +22,47 @@
  * @since 0.4
  */
 
-import java.awt.Window
-import java.awt.event.FocusEvent
-import java.awt.event.FocusListener
+import grails.ui.console.GrailsSwingConsole
 
-import org.codehaus.groovy.grails.compiler.GrailsProjectWatcher
-import org.codehaus.groovy.grails.support.*
-import org.codehaus.groovy.grails.cli.interactive.*
+import org.codehaus.groovy.grails.cli.interactive.InteractiveMode
+import org.codehaus.groovy.grails.project.ui.GrailsProjectConsole
 
 includeTargets << grailsScript("_GrailsBootstrap")
 
-target ('default': "Load the Grails interactive Swing console") {
-    depends(checkVersion, configureProxy, enableExpandoMetaClass, packageApp, classpath, console)
-}
+projectConsole = new GrailsProjectConsole(projectLoader)
 
-target(console:"The console implementation target") {
-    depends(loadApp, configureApp)
+target(console: "Load the Grails interactive Swing console") {
+    depends(checkVersion, configureProxy, enableExpandoMetaClass, classpath)
 
-    try {
-        def console = createConsole()
-        console.run()
-        def watcher = new GrailsProjectWatcher(projectCompiler, pluginManager)
-        watcher.start()
-
-        while (console.frame.visible) {
-            sleep 500
+    def forkSettings = grailsSettings.forkSettings
+    def forkConfig = forkSettings?.console
+    if (forkConfig == false || forkConfig == 'false') {
+        try {
+            compile()
+            projectConsole.run()
+        } catch (Exception e) {
+            grailsConsole.error "Error starting console: ${e.message}", e
         }
-
-        // Keep the console running until all windows are closed unless the
-        // interactive console is in use. The interactive console keeps the
-        // VM alive so we don't need to keep this thread running.
-        while (!InteractiveMode.isActive() && Window.windows.any { it.visible }) {
-            sleep 3000
+    }
+    else {
+        def forkedConsole = new GrailsSwingConsole(grailsSettings)
+        if (forkConfig instanceof Map) {
+            forkedConsole.configure(forkConfig)
         }
-    } catch (Exception e) {
-        event("StatusFinal", ["Error starting console: ${e.message}"])
+        if (InteractiveMode.active) {
+            grailsConsole.addStatus "Running Grails Console..."
+            Thread.start {
+                forkedConsole.fork()
+            }
+        }
+        else {
+            forkedConsole.fork()
+        }
     }
 }
 
 createConsole = {
-    def b = new Binding(ctx: appCtx, grailsApplication: grailsApp)
-
-    def groovyConsole = new groovy.ui.Console(grailsApp.classLoader, b)
-    groovyConsole.beforeExecution = {
-        appCtx.getBeansOfType(PersistenceContextInterceptor).each { k,v ->
-            v.init()
-        }
-    }
-    groovyConsole.afterExecution = {
-        appCtx.getBeansOfType(PersistenceContextInterceptor).each { k,v ->
-            v.flush()
-            v.destroy()
-        }
-    }
-
-    return groovyConsole
+    projectConsole.createConsole()
 }
 
-class ConsoleFocusListener implements FocusListener {
-    String text
-    void focusGained(FocusEvent e) {
-        e.source.text = text
-        e.source.removeFocusListener(this)
-    }
-    void focusLost(FocusEvent e) {}
-}
+setDefaultTarget 'console'

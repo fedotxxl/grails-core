@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.project.packaging
 
 import grails.build.logging.GrailsConsole
@@ -64,13 +63,13 @@ class GrailsProjectWarCreator extends BaseSettingsApi {
 
         super(settings, buildEventListener, interactive)
 
-        this.eventListener = buildEventListener
+        eventListener = buildEventListener
         this.projectPackager = projectPackager
         this.ant = ant
-        this.grailsSettings = settings
-        this.buildConfig = grailsSettings.config
-        this.basedir = grailsSettings.baseDir.absolutePath
-        this.grailsEnv = grailsSettings.grailsEnv
+        grailsSettings = settings
+        buildConfig = grailsSettings.config
+        basedir = grailsSettings.baseDir.absolutePath
+        grailsEnv = grailsSettings.grailsEnv
         resourcesDirPath = grailsSettings.resourcesDir.absolutePath
         pluginClassesDirPath = grailsSettings.pluginClassesDir.absolutePath
         classesDirPath = grailsSettings.classesDir.absolutePath
@@ -113,6 +112,22 @@ class GrailsProjectWarCreator extends BaseSettingsApi {
     }
 
     void packageWar() {
+        try {
+            projectPackager.projectCompiler.compileGroovyPages(grailsAppName, grailsSettings.classesDir)
+            packageWarOnly()
+        }
+        catch (e) {
+            if (e.cause?.class?.name == "org.codehaus.groovy.grails.web.taglib.exceptions.GrailsTagException") {
+                eventListener.triggerEvent("StatusError", "GSP Compilation error in file $e.cause.fileName at line $e.cause.lineNumber: $e.cause.message")
+            }
+            else {
+                eventListener.triggerEvent("StatusError", "WAR packaging error: ${e.cause?.message ?: e.message}")
+            }
+            exit(1)
+        }
+    }
+
+    void packageWarOnly() {
 
         def includeOsgiHeaders = grailsSettings.projectWarOsgiHeaders
 
@@ -186,11 +201,8 @@ class GrailsProjectWarCreator extends BaseSettingsApi {
                     include(name:"**/**")
                     exclude(name:"**/*.groovy")
                 }
-                fileset(dir:"${resourcesDirPath}", includes:"log4j.properties")
+                fileset(dir: resourcesDirPath, includes:"log4j.properties")
             }
-
-            def scaffoldDir = "${stagingDir}/WEB-INF/templates/scaffolding"
-            projectPackager.packageTemplates(scaffoldDir)
 
             // Copy the project's dependencies (JARs mainly) to the staging area.
             if (includeJars) {
@@ -211,7 +223,7 @@ class GrailsProjectWarCreator extends BaseSettingsApi {
                      tofile: "${stagingDir}/WEB-INF/web.xml",
                      overwrite:true, preservelastmodified:true)
 
-            def webXML = new File("${stagingDir}/WEB-INF/web.xml")
+            def webXML = new File(stagingDir, "WEB-INF/web.xml")
             def xmlInput = new XmlParser().parse(webXML)
             webXML.withWriter { xmlOutput ->
                 def printer = new XmlNodePrinter(new PrintWriter(xmlOutput), '\t')
@@ -244,18 +256,18 @@ class GrailsProjectWarCreator extends BaseSettingsApi {
                 if (includeOsgiHeaders) {
                     // OSGi bundle headers
                     attribute(name:"Bundle-ManifestVersion",value:"2")
-                    attribute(name:"Bundle-Name",value:"${grailsAppName}")
-                    attribute(name:"Bundle-SymbolicName",value:"${grailsAppName}")
+                    attribute(name:"Bundle-Name",value: grailsAppName)
+                    attribute(name:"Bundle-SymbolicName",value: grailsAppName)
                     // note that the version must be a valid OSGi version, e.g. major.minor.micro.qualifier,
                     // where major, minor, and micro must be numbers and qualifier can be any string
                     // minor, micro and qualifier are optional
-                    attribute(name:"Bundle-Version",value:"${metadata.getApplicationVersion()}")
+                    attribute(name:"Bundle-Version",value: metadata.getApplicationVersion())
                 }
                 // determine servlet and jsp versions
                 def optionalPackage = "resolution:=optional"
                 def servletVersion = ''
                 def jspVersion = ''
-                switch (metadata.getServletVersion()) {
+                switch (grailsSettings.servletVersion) {
                     case '2.4': servletVersion='version="[2.4,3.0)"'; jspVersion = 'version="[2.0,3.0)"'; break
                     case '2.5': servletVersion='version="[2.5,3.0)"'; jspVersion = 'version="[2.1,3.0)"'; break
                     case '3.0': servletVersion='version="[3.0,4.0)"'; jspVersion = 'version="[2.2,3.0)"'; break
@@ -280,16 +292,15 @@ class GrailsProjectWarCreator extends BaseSettingsApi {
                         "org.xml.sax.ext",
                         "org.xml.sax.helpers",
                 ]
-                def importedPackages = importedPackageList.join(',')
-                attribute(name:"Import-Package", value:"${importedPackages}")
+                attribute(name:"Import-Package", value: importedPackageList.join(','))
                 // Webapp context, this is used as URL prefix
-                attribute(name:"Webapp-Context",value:"${grailsAppName}")
+                attribute(name:"Webapp-Context",value: grailsAppName)
 
                 // Grails sub-section
                 section(name:"Grails Application") {
-                    attribute(name:"Implementation-Title",value:"${grailsAppName}")
-                    attribute(name:"Implementation-Version",value:"${metadata.getApplicationVersion()}")
-                    attribute(name:"Grails-Version",value:"${metadata.getGrailsVersion()}")
+                    attribute(name:"Implementation-Title",value: grailsAppName)
+                    attribute(name:"Implementation-Version",value: metadata.getApplicationVersion())
+                    attribute(name:"Grails-Version",value: metadata.getGrailsVersion())
                 }
             }
             ant.propertyfile(file:"${stagingDir}/WEB-INF/classes/application.properties") {
@@ -320,20 +331,18 @@ class GrailsProjectWarCreator extends BaseSettingsApi {
             // update OSGi bundle classpath in MANIFEST.MF after event
             // handlers had a chance to modify included jars
             // add all jars in WEB-INF/lib
-            def libDir = new File("${stagingDir}/WEB-INF/lib")
+            def libDir = new File(stagingDir, "WEB-INF/lib")
             def classPathEntries = [ ".", "WEB-INF/classes" ]
             if (includeJars) {
                 libDir.eachFileMatch(~/.*\.jar/) { classPathEntries << "WEB-INF/lib/${it.name}" }
             }
-            def classPath = classPathEntries.join(',')
             ant.manifest(file:manifestFile, mode:'update') {
-                attribute(name:"Bundle-ClassPath",value:"${classPath}")
+                attribute(name:"Bundle-ClassPath",value: classPathEntries.join(','))
             }
 
             eventListener.triggerEvent("CreateWarStart", warName, stagingDir)
             if (!buildExplodedWar) {
-                def warFile = new File(warName)
-                def dir = warFile.parentFile
+                def dir = new File(warName).parentFile
                 if (!dir.exists()) ant.mkdir(dir:dir)
                 ant.jar(destfile:warName, basedir:stagingDir, manifest:manifestFile)
             }
@@ -354,7 +363,7 @@ class GrailsProjectWarCreator extends BaseSettingsApi {
 
     def cleanUpAfterWar() {
         eventListener.triggerEvent("CleanUpAfterWarStart")
-        ant.delete(dir:"${stagingDir}", failonerror:true)
+        ant.delete(dir: stagingDir, failonerror:true)
         eventListener.triggerEvent("CleanUpAfterWarEnd")
     }
 
@@ -381,7 +390,6 @@ class GrailsProjectWarCreator extends BaseSettingsApi {
             }
         }
         else {
-            def fileName = grailsAppName
             def version = metadata.getApplicationVersion()
             if (version) {
                 version = '-' + version
@@ -389,7 +397,7 @@ class GrailsProjectWarCreator extends BaseSettingsApi {
             else {
                 version = ''
             }
-            warName = "${basedir}/${fileName}${version}.war"
+            warName = "${basedir}/$grailsAppName${version}.war"
         }
         return warName
     }
@@ -502,13 +510,12 @@ class GrailsProjectWarCreator extends BaseSettingsApi {
         }
 
         // copy everything else from grails-app/conf to /WEB-INF/classes
-        def targetClassesDir = "${stagingDir}/WEB-INF/classes"
-        def confDir = new File("${pluginBase.absolutePath}/grails-app/conf")
-        def hibDir = new File("${pluginBase.absolutePath}/grails-app/conf/hibernate")
-        def javaDir = new File("${pluginBase.absolutePath}/src/java")
-        def groovyDir = new File("${pluginBase.absolutePath}/src/groovy")
+        def confDir = new File(pluginBase.absolutePath, "grails-app/conf")
+        def hibDir = new File(pluginBase.absolutePath, "grails-app/conf/hibernate")
+        def javaDir = new File(pluginBase.absolutePath, "src/java")
+        def groovyDir = new File(pluginBase.absolutePath, "src/groovy")
         if (confDir.exists() || hibDir.exists() || javaDir.exists() || groovyDir.exists()) {
-            ant.copy(todir: targetClassesDir, failonerror: false, preservelastmodified:true) {
+            ant.copy(todir: "${stagingDir}/WEB-INF/classes", failonerror: false, preservelastmodified:true) {
                 if (confDir.exists()) {
                     fileset(dir: confDir) {
                         exclude(name: "*.groovy")

@@ -1,14 +1,14 @@
 package org.codehaus.groovy.grails.web.mime
 
-import spock.lang.Specification
 import org.codehaus.groovy.grails.commons.DefaultGrailsApplication
 import org.codehaus.groovy.grails.plugins.web.mimes.MimeTypesFactoryBean
 
+import spock.lang.Specification
+
 /**
  * @author Graeme Rocher
- *
  */
-class MimeUtilitySpec extends Specification{
+class MimeUtilitySpec extends Specification {
 
     MimeUtility getMimeUtility() {
         def ga = new DefaultGrailsApplication()
@@ -27,7 +27,6 @@ class MimeUtilitySpec extends Specification{
                     ]
 
         final factory = new MimeTypesFactoryBean(grailsApplication: ga)
-        factory.afterPropertiesSet()
 
         def mimeTypes = factory.getObject()
         return new DefaultMimeUtility(mimeTypes)
@@ -49,10 +48,7 @@ class MimeUtilitySpec extends Specification{
             mimeType != null
             mimeType.extension == 'xml'
             mimeType.name == 'text/xml'
-
-
     }
-
 
     void "Test get mime by URI method"() {
         when:"We lookup the mime type for the js extension"
@@ -70,7 +66,5 @@ class MimeUtilitySpec extends Specification{
             mimeType != null
             mimeType.extension == 'xml'
             mimeType.name == 'text/xml'
-
-
     }
 }

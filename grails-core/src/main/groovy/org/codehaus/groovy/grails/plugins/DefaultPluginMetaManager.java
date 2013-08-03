@@ -1,4 +1,5 @@
-/* Copyright 2006-2007 Graeme Rocher
+/*
+ * Copyright 2006-2007 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +28,6 @@ import org.springframework.core.io.Resource;
  * @deprecated This class is deprecated from version 1.2 and above
  */
 @Deprecated
-@SuppressWarnings("unused")
 public class DefaultPluginMetaManager implements PluginMetaManager{
 
     public DefaultPluginMetaManager() {

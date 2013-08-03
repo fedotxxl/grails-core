@@ -19,6 +19,7 @@ import java.io.UnsupportedEncodingException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,11 +29,19 @@ import javax.servlet.http.HttpServletRequest;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.codehaus.groovy.grails.commons.GrailsDomainClassProperty;
+import org.codehaus.groovy.grails.web.binding.DataBindingUtils;
 import org.codehaus.groovy.grails.web.binding.GrailsDataBinder;
 import org.codehaus.groovy.grails.web.binding.StructuredDateEditor;
+import org.codehaus.groovy.grails.web.binding.bindingsource.DataBindingSourceRegistry;
+import org.codehaus.groovy.grails.web.mime.MimeType;
+import org.codehaus.groovy.grails.web.mime.MimeTypeResolver;
 import org.codehaus.groovy.grails.web.servlet.mvc.exceptions.ControllerExecutionException;
 import org.codehaus.groovy.grails.web.util.TypeConvertingMap;
 import org.codehaus.groovy.grails.web.util.WebUtils;
+import org.grails.databinding.DataBindingSource;
+import org.grails.databinding.SimpleMapDataBindingSource;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.web.multipart.MultipartFile;
@@ -49,12 +58,12 @@ import org.springframework.web.multipart.MultipartHttpServletRequest;
  * @since Oct 24, 2005
  */
 @SuppressWarnings({ "rawtypes", "unchecked" })
-public class GrailsParameterMap extends TypeConvertingMap {
+public class GrailsParameterMap extends TypeConvertingMap implements Cloneable {
 
     private static final Log LOG = LogFactory.getLog(GrailsParameterMap.class);
     private static final Map<String, String> CACHED_DATE_FORMATS  = new ConcurrentHashMap<String, String>();
 
-    private HttpServletRequest request;
+    private final HttpServletRequest request;
     public static final String REQUEST_BODY_PARSED = "org.codehaus.groovy.grails.web.REQUEST_BODY_PARSED";
     public static final Object[] EMPTY_ARGS = new Object[0];
 
@@ -64,7 +73,7 @@ public class GrailsParameterMap extends TypeConvertingMap {
      * @param values The values to populate with
      * @param request The request object
      */
-    public GrailsParameterMap(Map values,HttpServletRequest request) {
+    public GrailsParameterMap(Map values, HttpServletRequest request) {
         this.request = request;
         wrappedMap.putAll(values);
     }
@@ -76,27 +85,48 @@ public class GrailsParameterMap extends TypeConvertingMap {
     public GrailsParameterMap(HttpServletRequest request) {
         this.request = request;
         final Map requestMap = new LinkedHashMap(request.getParameterMap());
-        if (requestMap.size() == 0 && "PUT".equals(request.getMethod()) && request.getAttribute(REQUEST_BODY_PARSED) == null) {
+        if (requestMap.isEmpty() && "PUT".equals(request.getMethod()) && request.getAttribute(REQUEST_BODY_PARSED) == null) {
             // attempt manual parse of request body. This is here because some containers don't parse the request body automatically for PUT request
             String contentType = request.getContentType();
             if ("application/x-www-form-urlencoded".equals(contentType)) {
                 try {
-                    String contents=IOUtils.toString(request.getReader());
+                    String contents = IOUtils.toString(request.getReader());
                     request.setAttribute(REQUEST_BODY_PARSED, true);
-                    requestMap.putAll(org.codehaus.groovy.grails.web.util.WebUtils.fromQueryString(contents));
+                    requestMap.putAll(WebUtils.fromQueryString(contents));
                 } catch (Exception e) {
                     LOG.error("Error processing form encoded PUT request", e);
                 }
             }
-
         }
+
         if (request instanceof MultipartHttpServletRequest) {
             Map<String,MultipartFile> fileMap = ((MultipartHttpServletRequest)request).getFileMap();
             for (Map.Entry<String, MultipartFile> entry : fileMap.entrySet()) {
                 requestMap.put(entry.getKey(), entry.getValue());
             }
         }
+
         updateNestedKeys(requestMap);
+    }
+
+    /**
+     * Converts the params object to a binding source for the given target type
+     * @param targetType The target type to bind to
+     * @return A {@link DataBindingSource}
+     */
+    DataBindingSource toBindingSource(Class targetType) {
+        GrailsWebRequest webRequest = GrailsWebRequest.lookup(request);
+        ApplicationContext context = webRequest.getApplicationContext();
+        DataBindingSourceRegistry dataBindingSourceRegistry = null;
+        if(context.containsBean(DataBindingSourceRegistry.BEAN_NAME))
+            dataBindingSourceRegistry = context.getBean(DataBindingSourceRegistry.BEAN_NAME, DataBindingSourceRegistry.class);
+
+        MimeTypeResolver mimeTypeResolver = null;
+        if(context.containsBean(MimeTypeResolver.BEAN_NAME))
+            mimeTypeResolver = context.getBean(MimeTypeResolver.BEAN_NAME, MimeTypeResolver.class);
+
+        MimeType mimeType = DataBindingUtils.resolveMimeType(this, mimeTypeResolver);
+        return dataBindingSourceRegistry != null ? dataBindingSourceRegistry.createDataBindingSource(mimeType, targetType, this) : new SimpleMapDataBindingSource(this);
     }
 
     void updateNestedKeys(Map keys) {
@@ -110,7 +140,23 @@ public class GrailsParameterMap extends TypeConvertingMap {
 
     @Override
     public Object clone() {
-        return new GrailsParameterMap(new LinkedHashMap(wrappedMap), request);
+        if (wrappedMap.isEmpty()) {
+            return new GrailsParameterMap(new LinkedHashMap(), request);
+        } else {
+            Map clonedMap = new LinkedHashMap(wrappedMap);
+            // deep clone nested entries
+            for(Iterator it=clonedMap.entrySet().iterator();it.hasNext();) {
+                Map.Entry entry = (Map.Entry)it.next();
+                if (entry.getValue() instanceof GrailsParameterMap) {
+                    entry.setValue(((GrailsParameterMap)entry.getValue()).clone());
+                }
+            }
+            return new GrailsParameterMap(clonedMap, request);
+        }
+    }
+
+    public void addParametersFrom(GrailsParameterMap otherMap) {
+        wrappedMap.putAll((GrailsParameterMap)otherMap.clone());
     }
 
     private Object getParameterValue(Map requestMap, String key) {
@@ -131,42 +177,46 @@ public class GrailsParameterMap extends TypeConvertingMap {
      */
     private void processNestedKeys(Map requestMap, String key, String nestedKey, Map nestedLevel) {
         final int nestedIndex = nestedKey.indexOf('.');
-        if (nestedIndex > -1) {
-            // We have at least one sub-key, so extract the first element
-            // of the nested key as the prfix. In other words, if we have
-            // 'nestedKey' == "a.b.c", the prefix is "a".
-            String nestedPrefix = nestedKey.substring(0, nestedIndex);
-            boolean prefixedByUnderscore = false;
+        if (nestedIndex == -1) {
+            return;
+        }
 
-            // Use the same prefix even if it starts with an '_'
-            if (nestedPrefix.startsWith("_")) {
-                prefixedByUnderscore = true;
-                nestedPrefix = nestedPrefix.substring(1);
+        // We have at least one sub-key, so extract the first element
+        // of the nested key as the prfix. In other words, if we have
+        // 'nestedKey' == "a.b.c", the prefix is "a".
+        String nestedPrefix = nestedKey.substring(0, nestedIndex);
+        boolean prefixedByUnderscore = false;
+
+        // Use the same prefix even if it starts with an '_'
+        if (nestedPrefix.startsWith("_")) {
+            prefixedByUnderscore = true;
+            nestedPrefix = nestedPrefix.substring(1);
+        }
+        // Let's see if we already have a value in the current map for the prefix.
+        Object prefixValue = nestedLevel.get(nestedPrefix);
+        if (prefixValue == null) {
+            // No value. So, since there is at least one sub-key,
+            // we create a sub-map for this prefix.
+
+            prefixValue = new GrailsParameterMap(new LinkedHashMap(), request);
+            nestedLevel.put(nestedPrefix, prefixValue);
+        }
+
+        // If the value against the prefix is a map, then we store the sub-keys in that map.
+        if (!(prefixValue instanceof Map)) {
+            return;
+        }
+
+        Map nestedMap = (Map)prefixValue;
+        if (nestedIndex < nestedKey.length() - 1) {
+            String remainderOfKey = nestedKey.substring(nestedIndex + 1, nestedKey.length());
+            // GRAILS-2486 Cascade the '_' prefix in order to bind checkboxes properly
+            if (prefixedByUnderscore) {
+                remainderOfKey = '_' + remainderOfKey;
             }
-            // Let's see if we already have a value in the current map for the prefix.
-            Object prefixValue = nestedLevel.get(nestedPrefix);
-            if (prefixValue == null) {
-                // No value. So, since there is at least one sub-key,
-                // we create a sub-map for this prefix.
-
-                prefixValue = new GrailsParameterMap(new LinkedHashMap(), request);
-                nestedLevel.put(nestedPrefix, prefixValue);
-            }
-
-            // If the value against the prefix is a map, then we store the sub-keys in that map.
-            if (prefixValue instanceof Map) {
-                Map nestedMap = (Map)prefixValue;
-                if (nestedIndex < nestedKey.length()-1) {
-                    String remainderOfKey = nestedKey.substring(nestedIndex + 1, nestedKey.length());
-                    // GRAILS-2486 Cascade the '_' prefix in order to bind checkboxes properly
-                    if (prefixedByUnderscore) {
-                        remainderOfKey = '_' + remainderOfKey;
-                    }
-                    nestedMap.put(remainderOfKey,getParameterValue(requestMap, key));
-                    if (remainderOfKey.indexOf('.') >-1) {
-                        processNestedKeys(requestMap, key, remainderOfKey, nestedMap);
-                    }
-                }
+            nestedMap.put(remainderOfKey,getParameterValue(requestMap, key));
+            if (remainderOfKey.indexOf('.') >-1) {
+                processNestedKeys(requestMap, key, remainderOfKey, nestedMap);
             }
         }
     }
@@ -178,7 +228,7 @@ public class GrailsParameterMap extends TypeConvertingMap {
         return request;
     }
 
-    private Map nestedDateMap = new LinkedHashMap();
+    private final Map nestedDateMap = new LinkedHashMap();
 
     @Override
     public Object get(Object key) {
@@ -234,8 +284,16 @@ public class GrailsParameterMap extends TypeConvertingMap {
     @Override
     public Object put(Object key, Object value) {
         if (value instanceof CharSequence) value = value.toString();
+        if (key instanceof CharSequence) key = key.toString();
         if (nestedDateMap.containsKey(key)) nestedDateMap.remove(key);
-        return wrappedMap.put(key, value);
+        Object returnValue =  wrappedMap.put(key, value);
+        if (key instanceof String) {
+            String keyString = (String)key;
+            if (keyString.indexOf(".") > -1) {
+                processNestedKeys(this, keyString, keyString, wrappedMap);
+            }
+        }
+        return returnValue;
     }
 
     @Override
@@ -297,11 +355,18 @@ public class GrailsParameterMap extends TypeConvertingMap {
     public String toQueryString() {
         String encoding = request.getCharacterEncoding();
         try {
-            return WebUtils.toQueryString(this,encoding);
+            return WebUtils.toQueryString(this, encoding);
         }
         catch (UnsupportedEncodingException e) {
             throw new ControllerExecutionException("Unable to convert parameter map [" + this +
                  "] to a query string: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * @return The identifier in the request
+     */
+    public Object getIdentifier() {
+        return get(GrailsDomainClassProperty.IDENTITY);
     }
 }

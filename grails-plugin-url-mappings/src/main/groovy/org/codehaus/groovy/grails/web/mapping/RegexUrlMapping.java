@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +15,31 @@
  */
 package org.codehaus.groovy.grails.web.mapping;
 
-import grails.util.GrailsWebUtil;
 import groovy.lang.Closure;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+
+import javax.servlet.ServletContext;
+
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.codehaus.groovy.grails.commons.GrailsApplication;
 import org.codehaus.groovy.grails.commons.GrailsControllerClass;
+import org.codehaus.groovy.grails.plugins.VersionComparator;
 import org.codehaus.groovy.grails.validation.ConstrainedProperty;
 import org.codehaus.groovy.grails.web.mapping.exceptions.UrlMappingException;
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest;
@@ -29,15 +48,6 @@ import org.springframework.util.Assert;
 import org.springframework.validation.Errors;
 import org.springframework.validation.MapBindingResult;
 import org.springframework.web.context.request.RequestContextHolder;
-
-import javax.servlet.ServletContext;
-import java.io.UnsupportedEncodingException;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 /**
  * <p>A UrlMapping implementation that takes a Grails URL pattern and turns it into a regex matcher so that
@@ -59,20 +69,28 @@ import java.util.regex.PatternSyntaxException;
 public class RegexUrlMapping extends AbstractUrlMapping {
 
     private Pattern[] patterns;
+    private Map<Integer, List<Pattern>> patternByTokenCount = new HashMap<Integer, List<Pattern>>();
     private UrlMappingData urlData;
-
-    private static final String WILDCARD = "*";
-    private static final String CAPTURED_WILDCARD = "(*)";
-    private static final String SLASH = "/";
-    private static final char QUESTION_MARK = '?';
-    private static final char AMPERSAND = '&';
-    private static final String DOUBLE_WILDCARD = "**";
     private static final String DEFAULT_ENCODING = "UTF-8";
-
-    private static final String CAPTURED_DOUBLE_WILDCARD = "(**)";
     private static final Log LOG = LogFactory.getLog(RegexUrlMapping.class);
-    private static final Pattern DOUBLE_WILDCARD_PATTERN = Pattern.compile("\\(\\*\\*?\\)");
-    private GrailsApplication grailsApplication;
+    public static final Pattern DOUBLE_WILDCARD_PATTERN = Pattern.compile("\\(\\*\\*?\\)\\??");
+    public static final Pattern OPTIONAL_EXTENSION_WILDCARD_PATTERN = Pattern.compile("[^/]+\\(\\.\\(\\*\\)\\)");
+
+    /**
+     * Constructs a new RegexUrlMapping for the given pattern that maps to the specified URI
+     *
+     * @param data The pattern
+     * @param uri The URI
+     * @param constraints Any constraints etc.
+     * @param servletContext The servlet context
+     */
+    public RegexUrlMapping(UrlMappingData data, URI uri, ConstrainedProperty[] constraints, ServletContext servletContext) {
+        super(uri, constraints, servletContext);
+        parse(data, constraints);
+    }
+    public RegexUrlMapping(UrlMappingData data, Object controllerName, Object actionName, Object namespace, Object pluginName, Object viewName, String httpMethod, String version, ConstrainedProperty[] constraints, ServletContext servletContext) {
+        this(null, data, controllerName, actionName, namespace, pluginName, viewName, httpMethod, version, constraints, servletContext);
+    }
 
     /**
      * Constructs a new RegexUrlMapping for the given pattern, controller name, action name and constraints.
@@ -80,33 +98,27 @@ public class RegexUrlMapping extends AbstractUrlMapping {
      * @param data           An instance of the UrlMappingData class that holds necessary information of the URL mapping
      * @param controllerName The name of the controller the URL maps to (required)
      * @param actionName     The name of the action the URL maps to
+     * @param namespace The controller namespace
+     * @param pluginName The name of the plugin which provided the controller
      * @param viewName       The name of the view as an alternative to the name of the action. If the action is specified it takes precedence over the view name during mapping
+     * @param httpMethod     The http method
+     * @param version     The version
      * @param constraints    A list of ConstrainedProperty instances that relate to tokens in the URL
      * @param servletContext
      * @see org.codehaus.groovy.grails.validation.ConstrainedProperty
      */
-    public RegexUrlMapping(UrlMappingData data, Object controllerName, Object actionName, Object pluginName,
-            Object viewName, ConstrainedProperty[] constraints, ServletContext servletContext) {
-        super(controllerName, actionName, pluginName, viewName, constraints != null ? constraints : new ConstrainedProperty[0], servletContext);
-        this.grailsApplication = GrailsWebUtil.lookupApplication(servletContext);
+    public RegexUrlMapping(Object redirectInfo, UrlMappingData data, Object controllerName, Object actionName, Object namespace, Object pluginName, Object viewName, String httpMethod, String version, ConstrainedProperty[] constraints, ServletContext servletContext) {
+        super(redirectInfo, controllerName, actionName, namespace, pluginName, viewName, constraints != null ? constraints : new ConstrainedProperty[0], servletContext);
+        if (httpMethod != null) {
+            this.httpMethod = httpMethod;
+        }
+        if (version != null) {
+            this.version = version;
+        }
         parse(data, constraints);
     }
 
-    /**
-     * Constructs a new RegexUrlMapipng for the given pattern that maps to the specified URI
-     *
-     * @param data The pattern
-     * @param uri The URI
-     * @param constraints Any constraints etc.
-     * @param servletContext The servlet context
-     */
-    public RegexUrlMapping(UrlMappingData data, URI uri, ConstrainedProperty[] constraints,
-            ServletContext servletContext) {
-        super(uri, constraints, servletContext);
-        parse(data, constraints);
-    }
-
-    private void parse(UrlMappingData data, @SuppressWarnings("hiding") ConstrainedProperty[] constraints) {
+    private void parse(UrlMappingData data, ConstrainedProperty[] constraints) {
         Assert.notNull(data, "Argument [data] cannot be null");
 
         String[] urls = data.getLogicalUrls();
@@ -115,32 +127,75 @@ public class RegexUrlMapping extends AbstractUrlMapping {
 
         for (int i = 0; i < urls.length; i++) {
             String url = urls[i];
+            Integer slashCount = org.springframework.util.StringUtils.countOccurrencesOf(url, "/");
+            List<Pattern> tokenCountPatterns = patternByTokenCount.get(slashCount);
+            if (tokenCountPatterns == null) {
+                tokenCountPatterns = new ArrayList<Pattern>();
+                patternByTokenCount.put(slashCount, tokenCountPatterns);
+            }
 
             Pattern pattern = convertToRegex(url);
             if (pattern == null) {
                 throw new IllegalStateException("Cannot use null pattern in regular expression mapping for url [" + data.getUrlPattern() + "]");
             }
-            patterns[i] = pattern;
+            tokenCountPatterns.add(pattern);
+            this.patterns[i] = pattern;
+
         }
 
         if (constraints != null) {
-            String pattern = data.getUrlPattern();
+            String[] tokens = data.getTokens();
             int pos = 0;
-            for (ConstrainedProperty constraint : constraints) {
-                pos = pattern.indexOf("(*)", pos);
+            int currentToken = 0;
+            int tokensLength = tokens.length - 1;
+            int constraintUpperBound = constraints.length;
+            if (data.hasOptionalExtension()) {
+                constraintUpperBound--;
+                constraints[constraintUpperBound].setNullable(true);
+            }
+
+            for (int i = 0; i < constraintUpperBound; i++) {
+                ConstrainedProperty constraint = constraints[i];
+                if (currentToken > tokensLength) break;
+                String token = tokens[currentToken];
+                int shiftLength = 3;
+                pos = token.indexOf(UrlMapping.CAPTURED_WILDCARD, pos);
+                while(pos == -1) {
+                    boolean isLastToken = currentToken == tokensLength-1;
+                    if (currentToken < tokensLength) {
+
+                        token = tokens[++currentToken];
+                        // special handling for last token to deal with optional extension
+                        if (isLastToken) {
+                            if (token.startsWith(UrlMapping.CAPTURED_WILDCARD + '?') ) {
+                                constraint.setNullable(true);
+                            }
+                            if (token.endsWith(UrlMapping.OPTIONAL_EXTENSION_WILDCARD + '?')) {
+                                constraints[constraints.length-1].setNullable(true);
+                            }
+                        }
+                        else {
+                            pos = token.indexOf(UrlMapping.CAPTURED_WILDCARD, pos);
+                        }
+                    }
+                    else {
+                        break;
+                    }
+                }
 
                 if (pos == -1) {
                     constraint.setNullable(true);
                 }
-                else if (pos + 3 < pattern.length() && pattern.charAt(pos + 3) == '?') {
+                else if (pos + shiftLength < token.length() && token.charAt(pos + shiftLength) == '?') {
                     constraint.setNullable(true);
-                }
-                else {
-                    constraint.setNullable(false);
                 }
 
                 // Move on to the next place-holder.
-                pos += 3;
+                pos += shiftLength;
+                if (token.indexOf(UrlMapping.CAPTURED_WILDCARD, pos) == -1) {
+                    currentToken++;
+                    pos = 0;
+                }
             }
         }
     }
@@ -157,11 +212,28 @@ public class RegexUrlMapping extends AbstractUrlMapping {
         try {
             // Escape any characters that have special meaning in regular expressions,
             // such as '.' and '+'.
-            pattern = StringUtils.replace(url, ".", "\\.");
-            pattern = StringUtils.replace(pattern, "+", "\\+");
+            pattern = url.replace(".", "\\.");
+            pattern = pattern.replace("+", "\\+");
+
+            int lastSlash = pattern.lastIndexOf('/');
+
+            String urlRoot = lastSlash > -1 ? pattern.substring(0, lastSlash) : pattern;
+            String urlEnd = lastSlash > -1 ? pattern.substring(lastSlash, pattern.length()) : "";
+
 
             // Now replace "*" with "[^/]" and "**" with ".*".
-            pattern = "^" + pattern.replaceAll("([^\\*])\\*([^\\*])", "$1[^/]+$2").replaceAll("([^\\*])\\*$", "$1[^/]+").replaceAll("\\*\\*", ".*");
+            pattern = "^" + urlRoot
+                                    .replace("(\\.(*))", "\\.?([^/]+)?")
+                                    .replaceAll("([^\\*])\\*([^\\*])", "$1[^/]+$2")
+                                    .replaceAll("([^\\*])\\*$", "$1[^/]+")
+                                    .replaceAll("\\*\\*", ".*");
+
+            pattern += urlEnd
+                                .replace("(\\.(*))", "\\.?([^/]+)?")
+                                .replaceAll("([^\\*])\\*([^\\*])", "$1[^/\\.]+$2")
+                                .replaceAll("([^\\*])\\*$", "$1[^/\\.]+")
+                                .replaceAll("\\*\\*", ".*");
+
             pattern += "/??$";
             regex = Pattern.compile(pattern);
         }
@@ -181,10 +253,11 @@ public class RegexUrlMapping extends AbstractUrlMapping {
      * @see org.codehaus.groovy.grails.web.mapping.UrlMappingInfo
      */
     public UrlMappingInfo match(String uri) {
+        Integer slashCount = org.springframework.util.StringUtils.countOccurrencesOf(uri, "/");
         for (Pattern pattern : patterns) {
             Matcher m = pattern.matcher(uri);
             if (m.matches()) {
-                UrlMappingInfo urlInfo = createUrlMappingInfo(uri, m);
+                UrlMappingInfo urlInfo = createUrlMappingInfo(uri, m, slashCount);
                 if (urlInfo != null) {
                     return urlInfo;
                 }
@@ -216,12 +289,50 @@ public class RegexUrlMapping extends AbstractUrlMapping {
         StringBuilder uri = new StringBuilder(contextPath);
         Set usedParams = new HashSet();
 
-        Pattern p = DOUBLE_WILDCARD_PATTERN;
 
         String[] tokens = urlData.getTokens();
         int paramIndex = 0;
-        for (String token : tokens) {
-            Matcher m = p.matcher(token);
+        for (int i = 0; i < tokens.length; i++) {
+            String token = tokens[i];
+            if (i == tokens.length - 1 && urlData.hasOptionalExtension()) {
+                token += UrlMapping.OPTIONAL_EXTENSION_WILDCARD;
+            }
+            Matcher m = OPTIONAL_EXTENSION_WILDCARD_PATTERN.matcher(token);
+            if (m.find()) {
+
+                if (token.startsWith(CAPTURED_WILDCARD)) {
+                    ConstrainedProperty prop = constraints[paramIndex++];
+                    String propName = prop.getPropertyName();
+
+                    Object value = paramValues.get(propName);
+                    usedParams.add(propName);
+
+                    if (value != null) {
+                        token = token.replaceFirst(DOUBLE_WILDCARD_PATTERN.pattern(), value.toString());
+                    }
+                    else if (prop.isNullable()) {
+                        break;
+                    }
+                }
+                uri.append(SLASH);
+                ConstrainedProperty prop = constraints[paramIndex++];
+                String propName = prop.getPropertyName();
+                Object value = paramValues.get(propName);
+                usedParams.add(propName);
+                if (value != null) {
+                    String ext = "." + value;
+                    uri.append(token.replace(OPTIONAL_EXTENSION_WILDCARD+'?', ext).replace(OPTIONAL_EXTENSION_WILDCARD, ext));
+                }
+                else {
+                    uri.append(token.replace(OPTIONAL_EXTENSION_WILDCARD+'?', "").replace(OPTIONAL_EXTENSION_WILDCARD, ""));
+                }
+
+                continue;
+            }
+            if (token.endsWith("?")) {
+                token = token.substring(0,token.length()-1);
+            }
+            m = DOUBLE_WILDCARD_PATTERN.matcher(token);
             if (m.find()) {
                 StringBuffer buf = new StringBuffer();
                 do {
@@ -231,8 +342,8 @@ public class RegexUrlMapping extends AbstractUrlMapping {
                     usedParams.add(propName);
                     if (value == null && !prop.isNullable()) {
                         throw new UrlMappingException("Unable to create URL for mapping [" + this +
-                                "] and parameters [" + paramValues + "]. Parameter [" +
-                                prop.getPropertyName() + "] is required, but was not specified!");
+                            "] and parameters [" + paramValues + "]. Parameter [" +
+                            prop.getPropertyName() + "] is required, but was not specified!");
                     }
                     else if (value == null) {
                         m.appendReplacement(buf, "");
@@ -256,7 +367,7 @@ public class RegexUrlMapping extends AbstractUrlMapping {
                         String[] segs = v.split(SLASH);
                         for (String segment : segs) {
                             uri.append(SLASH).append(encode(segment, encoding));
-                        } 
+                        }
                     }
                     else if (v.length() > 0) {
                         // original behavior
@@ -269,7 +380,7 @@ public class RegexUrlMapping extends AbstractUrlMapping {
                 }
                 catch (UnsupportedEncodingException e) {
                     throw new ControllerExecutionException("Error creating URL for parameters [" +
-                            paramValues + "], problem encoding URL part [" + buf + "]: " + e.getMessage(), e);
+                        paramValues + "], problem encoding URL part [" + buf + "]: " + e.getMessage(), e);
                 }
             }
             else {
@@ -294,15 +405,19 @@ public class RegexUrlMapping extends AbstractUrlMapping {
     }
 
     public String createURL(String controller, String action, Map paramValues, String encoding) {
-        return createURL(controller, action, null, paramValues, encoding);
+        return createURL(controller, action, null, null, paramValues, encoding);
     }
 
-    public String createURL(String controller, String action, String pluginName, Map paramValues, String encoding) {
-        return createURLInternal(controller, action, pluginName, paramValues, encoding, true);
+    public String createURL(String controller, String action, String pluginName, Map parameterValues, String encoding) {
+        return createURL(controller, action, null, pluginName, parameterValues, encoding);
     }
-    
+
+    public String createURL(String controller, String action, String namespace, String pluginName, Map paramValues, String encoding) {
+        return createURLInternal(controller, action, namespace, pluginName, paramValues, encoding, true);
+    }
+
     @SuppressWarnings("unchecked")
-    private String createURLInternal(String controller, String action, String pluginName, Map paramValues,
+    private String createURLInternal(String controller, String action, String namespace, String pluginName, Map paramValues,
             String encoding, boolean includeContextPath) {
 
         if (paramValues == null) paramValues = new HashMap();
@@ -310,6 +425,7 @@ public class RegexUrlMapping extends AbstractUrlMapping {
         boolean hasController = !StringUtils.isBlank(controller);
         boolean hasAction = !StringUtils.isBlank(action);
         boolean hasPlugin = !StringUtils.isBlank(pluginName);
+        boolean hasNamespace = !StringUtils.isBlank(namespace);
 
         try {
             if (hasController) {
@@ -319,7 +435,10 @@ public class RegexUrlMapping extends AbstractUrlMapping {
                 paramValues.put(ACTION, action);
             }
             if (hasPlugin) {
-                paramValues.put("plugin", pluginName);
+                paramValues.put(PLUGIN, pluginName);
+            }
+            if (hasNamespace) {
+                paramValues.put(NAMESPACE, namespace);
             }
 
             return createURLInternal(paramValues, encoding, includeContextPath);
@@ -338,35 +457,37 @@ public class RegexUrlMapping extends AbstractUrlMapping {
     }
 
     public String createRelativeURL(String controller, String action, Map paramValues, String encoding) {
-        return createRelativeURL(controller, action, null, paramValues, encoding);
+        return createRelativeURL(controller, action, null, null, paramValues, encoding);
     }
-
     public String createRelativeURL(String controller, String action, String pluginName, Map paramValues, String encoding) {
-        return createURLInternal(controller, action, pluginName, paramValues, encoding, false);
-    }
-    
-    public String createRelativeURL(String controller, String action, Map paramValues,
-            String encoding, String fragment) {
-        return createRelativeURL(controller, action, null, paramValues, encoding, fragment);
+        return createRelativeURL(controller, action, null, pluginName, paramValues, encoding);
     }
 
-    public String createRelativeURL(String controller, String action, String pluginName, Map paramValues,
+    public String createRelativeURL(String controller, String action, String namespace, String pluginName, Map paramValues, String encoding) {
+        return createURLInternal(controller, action, namespace, pluginName, paramValues, encoding, false);
+    }
+
+    public String createRelativeURL(String controller, String action, Map paramValues, String encoding, String fragment) {
+        return createRelativeURL(controller, action, null, null, paramValues, encoding, fragment);
+    }
+
+    public String createRelativeURL(String controller, String action, String namespace, String pluginName, Map paramValues,
             String encoding, String fragment) {
-        final String url = createURLInternal(controller, action, pluginName, paramValues, encoding, false);
+        final String url = createURLInternal(controller, action, namespace, pluginName, paramValues, encoding, false);
         return createUrlWithFragment(url, fragment, encoding);
     }
-    
+
     public String createURL(String controller, String action, Map paramValues,
             String encoding, String fragment) {
-        return createURL(controller, action, null, paramValues, encoding, fragment);
+        return createURL(controller, action, null, null, paramValues, encoding, fragment);
     }
 
-    public String createURL(String controller, String action, String pluginName, Map paramValues,
+    public String createURL(String controller, String action, String namespace, String pluginName, Map paramValues,
             String encoding, String fragment) {
-        String url = createURL(controller, action, pluginName, paramValues, encoding);
+        String url = createURL(controller, action, namespace, pluginName, paramValues, encoding);
         return createUrlWithFragment(url, fragment, encoding);
     }
-    
+
     private String createUrlWithFragment(String url, String fragment, String encoding) {
         if (fragment != null) {
             // A 'null' encoding will cause an exception, so default to 'UTF-8'.
@@ -451,18 +572,16 @@ public class RegexUrlMapping extends AbstractUrlMapping {
     }
 
     @SuppressWarnings("unchecked")
-    private UrlMappingInfo createUrlMappingInfo(String uri, Matcher m) {
+    private UrlMappingInfo createUrlMappingInfo(String uri, Matcher m, int tokenCount) {
+        boolean hasOptionalExtension = urlData.hasOptionalExtension();
         Map params = new HashMap();
         Errors errors = new MapBindingResult(params, "urlMapping");
         String lastGroup = null;
-        for (int i = 0; i < m.groupCount(); i++) {
+        for (int i = 0, count = m.groupCount(); i < count; i++) {
             lastGroup = m.group(i + 1);
-            int j = lastGroup.indexOf('?');
-            if (j > -1) {
-                lastGroup = lastGroup.substring(0, j);
-            }
-            if (constraints.length > i) {
-                ConstrainedProperty cp = constraints[i];
+            // if null optional.. ignore
+            if (i == tokenCount & hasOptionalExtension) {
+                ConstrainedProperty cp = constraints[constraints.length-1];
                 cp.validate(this, lastGroup, errors);
 
                 if (errors.hasErrors()) {
@@ -470,23 +589,28 @@ public class RegexUrlMapping extends AbstractUrlMapping {
                 }
 
                 params.put(cp.getPropertyName(), lastGroup);
+                break;
             }
-        }
+            else {
+                if (lastGroup == null) continue;
+                int j = lastGroup.indexOf('?');
+                if (j > -1) {
+                    lastGroup = lastGroup.substring(0, j);
+                }
+                if (constraints.length > i) {
+                    ConstrainedProperty cp = constraints[i];
+                    cp.validate(this, lastGroup, errors);
 
-        Map<String, Object> config = grailsApplication != null ? grailsApplication.getFlatConfig() : null;
-        if (lastGroup != null && config != null && Boolean.TRUE.equals(config.get("grails.mapping.legacyMapping"))) {
-            String remainingUri = uri.substring(uri.lastIndexOf(lastGroup) + lastGroup.length());
-            if (remainingUri.length() > 0) {
-                if (remainingUri.startsWith(SLASH)) remainingUri = remainingUri.substring(1);
-                String[] tokens = remainingUri.split(SLASH);
-                for (int i = 0; i < tokens.length; i = i + 2) {
-                    String token = tokens[i];
-                    if ((i + 1) < tokens.length) {
-                        params.put(token, tokens[i + 1]);
+                    if (errors.hasErrors()) {
+                        return null;
                     }
+
+                    params.put(cp.getPropertyName(), lastGroup);
                 }
             }
+
         }
+
 
         for (Object key : parameterValues.keySet()) {
             params.put(key, parameterValues.get(key));
@@ -500,19 +624,27 @@ public class RegexUrlMapping extends AbstractUrlMapping {
             actionName = createRuntimeConstraintEvaluator(GrailsControllerClass.ACTION, constraints);
         }
 
+        if (namespace == null) {
+            namespace = createRuntimeConstraintEvaluator(NAMESPACE, constraints);
+        }
+
         if (viewName == null) {
             viewName = createRuntimeConstraintEvaluator(GrailsControllerClass.VIEW, constraints);
+        }
+        
+        if(redirectInfo == null) {
+            redirectInfo = createRuntimeConstraintEvaluator("redirect", constraints);
         }
 
         DefaultUrlMappingInfo info;
         if (forwardURI != null && controllerName == null) {
-            info = new DefaultUrlMappingInfo(forwardURI, urlData, servletContext);
+            info = new DefaultUrlMappingInfo(forwardURI,getHttpMethod(), urlData, servletContext);
         }
         else if (viewName != null && controllerName == null) {
             info = new DefaultUrlMappingInfo(viewName, params, urlData, servletContext);
         }
         else {
-            info = new DefaultUrlMappingInfo(controllerName, actionName, pluginName, getViewName(), params, urlData, servletContext);
+            info = new DefaultUrlMappingInfo(redirectInfo, controllerName, actionName, namespace, pluginName, getViewName(), getHttpMethod(),getVersion(), params, urlData, servletContext);
         }
 
         if (parseRequest) {
@@ -530,8 +662,7 @@ public class RegexUrlMapping extends AbstractUrlMapping {
      * @param constraints The array of current ConstrainedProperty instances
      * @return Either a Closure or null
      */
-    private Object createRuntimeConstraintEvaluator(final String name,
-            @SuppressWarnings("hiding") ConstrainedProperty[] constraints) {
+    private Object createRuntimeConstraintEvaluator(final String name, ConstrainedProperty[] constraints) {
         if (constraints == null) return null;
 
         for (ConstrainedProperty constraint : constraints) {
@@ -621,7 +752,20 @@ public class RegexUrlMapping extends AbstractUrlMapping {
         int constraintDiff = getAppliedConstraintsCount(this) - getAppliedConstraintsCount(other);
         if (constraintDiff != 0) return constraintDiff;
 
-        return 0;
+        String thisVersion = getVersion();
+        String thatVersion = other.getVersion();
+        if((thisVersion.equals(thatVersion))) {
+            return 0;
+        }
+        else if(thisVersion.equals(UrlMapping.ANY_VERSION) && !thatVersion.equals(UrlMapping.ANY_VERSION)) {
+            return -1;
+        }
+        else if(!thisVersion.equals(UrlMapping.ANY_VERSION) && thatVersion.equals(UrlMapping.ANY_VERSION)) {
+            return 1;
+        }
+        else {
+            return new VersionComparator().compare(thisVersion, thatVersion);
+        }
     }
 
     private int getAppliedConstraintsCount(UrlMapping mapping) {
@@ -660,11 +804,11 @@ public class RegexUrlMapping extends AbstractUrlMapping {
     }
 
     private boolean isSingleWildcard(String token) {
-        return WILDCARD.equals(token) || CAPTURED_WILDCARD.equals(token);
+        return token.contains(WILDCARD) || token.contains(CAPTURED_WILDCARD);
     }
 
     private boolean isDoubleWildcard(String token) {
-        return DOUBLE_WILDCARD.equals(token) || CAPTURED_DOUBLE_WILDCARD.equals(token);
+        return token.contains(DOUBLE_WILDCARD) || token.contains(CAPTURED_DOUBLE_WILDCARD);
     }
 
     @Override

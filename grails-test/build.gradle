@@ -2,10 +2,30 @@ dependencies {
 
     compile "org.springframework:spring-tx:${springVersion}"
 
+    // Ant
+    compile "org.apache.ant:ant:${antVersion}"
+    compile "org.apache.ant:ant-junit:${antVersion}"
 
     // Testing
-    compile "junit:junit:${junitVersion}", project(":grails-plugin-converters"), project(":grails-plugin-mimetypes")
+    compile "junit:junit:${junitVersion}", {
+        exclude group:'org.hamcrest', module: 'hamcrest-core'
+    }
+    compile project(":grails-plugin-converters"), project(":grails-plugin-mimetypes")
 
     compile project(":grails-web")
+
+    compile("org.codehaus.gant:gant_groovy1.8:${gantVersion}") {
+        ext.notInPom = true
+    }
+    compile  "jline:jline:$jlineVersion", {
+        ext.notInPom = true
+    }
+    compile  "org.fusesource.jansi:jansi:$jansiVersion", {
+        ext.notInPom = true
+    }
+
+    compile("org.spockframework:spock-core:${spockVersion}") {
+        exclude group:'junit', module: 'junit-dep'
+        exclude group:'org.codehaus.groovy', module: 'groovy-all'
+    }
 }
-jar.appendix = 'test'

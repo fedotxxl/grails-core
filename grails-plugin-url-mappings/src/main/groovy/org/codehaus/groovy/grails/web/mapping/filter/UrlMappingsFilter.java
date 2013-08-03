@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +15,17 @@
  */
 package org.codehaus.groovy.grails.web.mapping.filter;
 
+import grails.util.CollectionUtils;
 import grails.util.Metadata;
 import grails.web.UrlConverter;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.servlet.FilterChain;
 import javax.servlet.ServletContext;
@@ -37,6 +41,7 @@ import org.codehaus.groovy.grails.commons.GrailsApplication;
 import org.codehaus.groovy.grails.commons.GrailsClass;
 import org.codehaus.groovy.grails.commons.GrailsClassUtils;
 import org.codehaus.groovy.grails.commons.cfg.GrailsConfig;
+import org.codehaus.groovy.grails.commons.metaclass.DynamicMethodInvocation;
 import org.codehaus.groovy.grails.compiler.GrailsProjectWatcher;
 import org.codehaus.groovy.grails.exceptions.DefaultStackTraceFilterer;
 import org.codehaus.groovy.grails.exceptions.StackTraceFilterer;
@@ -46,13 +51,20 @@ import org.codehaus.groovy.grails.web.mapping.UrlMapping;
 import org.codehaus.groovy.grails.web.mapping.UrlMappingInfo;
 import org.codehaus.groovy.grails.web.mapping.UrlMappingsHolder;
 import org.codehaus.groovy.grails.web.mapping.exceptions.UrlMappingException;
+import org.codehaus.groovy.grails.web.metaclass.RedirectDynamicMethod;
 import org.codehaus.groovy.grails.web.mime.MimeType;
+import org.codehaus.groovy.grails.web.mime.MimeTypeResolver;
 import org.codehaus.groovy.grails.web.pages.exceptions.GroovyPagesException;
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes;
+import org.codehaus.groovy.grails.web.servlet.HttpHeaders;
 import org.codehaus.groovy.grails.web.servlet.WrappedResponseHolder;
+import org.codehaus.groovy.grails.web.servlet.mvc.GrailsParameterMap;
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest;
 import org.codehaus.groovy.grails.web.util.WebUtils;
+import org.codehaus.groovy.runtime.DefaultGroovyMethods;
 import org.springframework.context.ApplicationContext;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.context.support.WebApplicationContextUtils;
@@ -82,10 +94,12 @@ public class UrlMappingsFilter extends OncePerRequestFilter {
     private GrailsApplication application;
     private GrailsConfig grailsConfig;
     private ViewResolver viewResolver;
-    private MimeType[] mimeTypes;
     private StackTraceFilterer filterer;
-
+    private MimeTypeResolver mimeTypeResolver;
     private UrlConverter urlConverter;
+    private Boolean allowHeaderForWrongHttpMethod;
+    final DynamicMethodInvocation redirectDynamicMethod = new RedirectDynamicMethod();
+
 
     @Override
     protected void initFilterBean() throws ServletException {
@@ -102,9 +116,11 @@ public class UrlMappingsFilter extends OncePerRequestFilter {
             grailsConfig = new GrailsConfig(application);
         }
 
-        if (applicationContext.containsBean(MimeType.BEAN_NAME)) {
-            mimeTypes = applicationContext.getBean(MimeType.BEAN_NAME, MimeType[].class);
+        Map<String, MimeTypeResolver> mimeTypeResolvers = applicationContext.getBeansOfType(MimeTypeResolver.class);
+        if(!mimeTypeResolvers.isEmpty()) {
+            mimeTypeResolver = mimeTypeResolvers.values().iterator().next();
         }
+        this.allowHeaderForWrongHttpMethod = grailsConfig.get(WebUtils.SEND_ALLOW_HEADER_FOR_INVALID_HTTP_METHOD, Boolean.TRUE);
         createStackTraceFilterer();
     }
 
@@ -130,64 +146,44 @@ public class UrlMappingsFilter extends OncePerRequestFilter {
             LOG.debug(holder);
         }
 
-        if (areFileExtensionsEnabled()) {
-            String format = WebUtils.getFormatFromURI(uri, mimeTypes);
-            if (format != null) {
-                MimeType[] configuredMimes = mimeTypes != null ? mimeTypes : MimeType.getConfiguredMimeTypes();
-                // only remove the file extension if its one of the configured mimes in Config.groovy
-                for (MimeType configuredMime : configuredMimes) {
-                    if (configuredMime.getExtension().equals(format)) {
-                        request.setAttribute(GrailsApplicationAttributes.RESPONSE_FORMAT, format);
-                        uri = uri.substring(0, (uri.length() - format.length() - 1));
-                        break;
-                    }
-                }
-            }
-        }
-
         GrailsWebRequest webRequest = (GrailsWebRequest)request.getAttribute(GrailsApplicationAttributes.WEB_REQUEST);
-        UrlMappingInfo[] urlInfos = holder.matchAll(uri);
+        HttpServletRequest currentRequest = webRequest.getCurrentRequest();
+        String version = findRequestedVersion(webRequest);
+
+        UrlMappingInfo[] urlInfos = holder.matchAll(uri, currentRequest.getMethod(), version != null ? version : UrlMapping.ANY_VERSION);
         WrappedResponseHolder.setWrappedResponse(response);
         boolean dispatched = false;
         try {
-            // GRAILS-3369: Save the original request parameters.
-            Map backupParameters;
-            try {
-                backupParameters = new HashMap(webRequest.getParams());
-            }
-            catch (Exception e) {
-                LOG.error("Error creating params object: " + e.getMessage(), e);
-                backupParameters = Collections.EMPTY_MAP;
-            }
 
             for (UrlMappingInfo info : urlInfos) {
                 if (info != null) {
+                    Object redirectInfo = info.getRedirectInfo();
+                    if(redirectInfo != null) {
+                        final Map redirectArgs;
+                        if(redirectInfo instanceof Map) {
+                            redirectArgs = (Map) redirectInfo;
+                        } else {
+                            redirectArgs = CollectionUtils.newMap("uri", redirectInfo);
+                        }
+                        GrailsParameterMap params = webRequest.getParams();
+                        redirectArgs.put("params", params);
+                        redirectDynamicMethod.invoke(this, "redirect", new Object[]{ redirectArgs } );
+                        dispatched = true;
+
+                        break;
+                    }
                     // GRAILS-3369: The configure() will modify the
                     // parameter map attached to the web request. So,
                     // we need to clear it each time and restore the
                     // original request parameters.
-                    webRequest.getParams().clear();
-                    webRequest.getParams().putAll(backupParameters);
+                    webRequest.resetParams();
 
                     final String viewName;
                     try {
                         info.configure(webRequest);
-                        String action = info.getActionName() == null ? "" : info.getActionName();
                         viewName = info.getViewName();
                         if (viewName == null && info.getURI() == null) {
-                            final String controllerName = info.getControllerName();
-                            String pluginName = info.getPluginName();
-                            String featureUri = WebUtils.SLASH + urlConverter.toUrlElement(controllerName) + WebUtils.SLASH + urlConverter.toUrlElement(action);
-                            
-                            Object featureId = null;
-                            if(pluginName != null) {
-                            	Map featureIdMap = new HashMap();
-                            	featureIdMap.put("uri", featureUri);
-                            	featureIdMap.put("pluginName", pluginName);
-                            	featureId = featureIdMap;
-                            } else {
-                            	featureId = featureUri;
-                            }
+                            ControllerArtefactHandler.ControllerCacheKey featureId = getFeatureId(info);
                             GrailsClass controller = application.getArtefactForFeature(ControllerArtefactHandler.TYPE, featureId);
                             if (controller == null) {
                                 continue;
@@ -238,11 +234,63 @@ public class UrlMappingsFilter extends OncePerRequestFilter {
         }
 
         if (!dispatched) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("No match found, processing remaining filter chain.");
+            Set<HttpMethod> allowedHttpMethods = allowHeaderForWrongHttpMethod ? allowedMethods(holder, uri) : Collections.EMPTY_SET;
+
+            if(allowedHttpMethods.isEmpty()) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("No match found, processing remaining filter chain.");
+                }
+                processFilterChain(request, response, filterChain);
             }
-            processFilterChain(request, response, filterChain);
+            else {
+                response.addHeader(HttpHeaders.ALLOW, DefaultGroovyMethods.join(allowedHttpMethods, ","));
+                response.sendError(HttpStatus.METHOD_NOT_ALLOWED.value());
+            }
         }
+    }
+
+    protected Set<HttpMethod> allowedMethods(UrlMappingsHolder holder, String uri) {
+        UrlMappingInfo[] urlMappingInfos = holder.matchAll(uri, UrlMapping.ANY_HTTP_METHOD);
+        Set<HttpMethod> methods = new HashSet<HttpMethod>();
+
+        for (UrlMappingInfo urlMappingInfo : urlMappingInfos) {
+            Object featureId = getFeatureId(urlMappingInfo);
+            GrailsClass controllerClass = application.getArtefactForFeature(ControllerArtefactHandler.TYPE, featureId);
+            if(controllerClass != null) {
+                if(urlMappingInfo.getHttpMethod() == null || urlMappingInfo.getHttpMethod().equals(UrlMapping.ANY_HTTP_METHOD)) {
+                    methods.addAll(Arrays.asList(HttpMethod.values())); break;
+                }
+                else {
+                    HttpMethod method = HttpMethod.valueOf(urlMappingInfo.getHttpMethod().toUpperCase());
+                    methods.add(method);
+                }
+            }
+        }
+
+        return Collections.unmodifiableSet(methods);
+    }
+
+    private String findRequestedVersion(GrailsWebRequest currentRequest) {
+        String version = currentRequest.getHeader(HttpHeaders.ACCEPT_VERSION);
+        if(version == null && mimeTypeResolver != null) {
+            MimeType mimeType = mimeTypeResolver.resolveResponseMimeType(currentRequest);
+            version = mimeType.getVersion();
+        }
+        return version;
+    }
+
+    private ControllerArtefactHandler.ControllerCacheKey getFeatureId(UrlMappingInfo info) {
+        final String action = info.getActionName() == null ? "" : info.getActionName();
+        final String controllerName = info.getControllerName();
+        final String pluginName = info.getPluginName();
+        final String namespace = info.getNamespace();
+        final String featureUri = getControllerFeatureURI(controllerName, action);
+
+        return new ControllerArtefactHandler.ControllerCacheKey(featureUri, pluginName, namespace);
+    }
+
+    private String getControllerFeatureURI(String controller, String action) {
+        return WebUtils.SLASH + urlConverter.toUrlElement(controller) + WebUtils.SLASH + urlConverter.toUrlElement(action);
     }
 
     public static boolean isUriExcluded(UrlMappingsHolder holder, String uri) {
@@ -269,15 +317,6 @@ public class UrlMappingsFilter extends OncePerRequestFilter {
         return isExcluded;
     }
 
-    private boolean areFileExtensionsEnabled() {
-        if (grailsConfig != null) {
-            final Boolean value = grailsConfig.get(WebUtils.ENABLE_FILE_EXTENSIONS, Boolean.class);
-            if (value != null) {
-                return value;
-            }
-        }
-        return true;
-    }
 
     private boolean noRegexMappings(UrlMappingsHolder holder) {
         for (UrlMapping mapping : holder.getUrlMappings()) {

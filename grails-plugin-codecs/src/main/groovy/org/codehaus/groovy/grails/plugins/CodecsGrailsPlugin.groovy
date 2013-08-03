@@ -15,25 +15,39 @@
  */
 package org.codehaus.groovy.grails.plugins
 
-import grails.util.Environment
 import grails.util.GrailsUtil
 
-import org.codehaus.groovy.grails.plugins.codecs.*
-import org.codehaus.groovy.grails.commons.*
+import org.codehaus.groovy.grails.commons.CodecArtefactHandler
+import org.codehaus.groovy.grails.plugins.codecs.Base64Codec
+import org.codehaus.groovy.grails.plugins.codecs.DefaultCodecLookup
+import org.codehaus.groovy.grails.plugins.codecs.HTML4Codec
+import org.codehaus.groovy.grails.plugins.codecs.HTMLCodec
+import org.codehaus.groovy.grails.plugins.codecs.HexCodec
+import org.codehaus.groovy.grails.plugins.codecs.JavaScriptCodec
+import org.codehaus.groovy.grails.plugins.codecs.MD5BytesCodec
+import org.codehaus.groovy.grails.plugins.codecs.MD5Codec
+import org.codehaus.groovy.grails.plugins.codecs.RawCodec
+import org.codehaus.groovy.grails.plugins.codecs.SHA1BytesCodec
+import org.codehaus.groovy.grails.plugins.codecs.SHA1Codec
+import org.codehaus.groovy.grails.plugins.codecs.SHA256BytesCodec
+import org.codehaus.groovy.grails.plugins.codecs.SHA256Codec
+import org.codehaus.groovy.grails.plugins.codecs.URLCodec
+import org.codehaus.groovy.grails.plugins.codecs.XMLCodec
 
 /**
- * A plugin that configures pluggable codecs.
+ * Configures pluggable codecs.
  *
  * @author Jeff Brown
  * @since 0.4
  */
 class CodecsGrailsPlugin {
-
     def version = GrailsUtil.getGrailsVersion()
     def dependsOn = [core:version]
     def watchedResources = "file:./grails-app/utils/**/*Codec.groovy"
     def providedArtefacts = [
         HTMLCodec,
+        HTML4Codec,
+        XMLCodec,
         JavaScriptCodec,
         URLCodec,
         Base64Codec,
@@ -43,80 +57,18 @@ class CodecsGrailsPlugin {
         SHA1Codec,
         SHA1BytesCodec,
         SHA256Codec,
-        SHA256BytesCodec
+        SHA256BytesCodec,
+        RawCodec
     ]
 
     def onChange = { event ->
         if (application.isArtefactOfType(CodecArtefactHandler.TYPE, event.source)) {
             def codecClass = application.addArtefact(CodecArtefactHandler.TYPE, event.source)
-            configureCodecMethods codecClass
+            event.ctx.codecLookup.reInitialize()
         }
     }
 
-    def doWithDynamicMethods = { applicationContext ->
-        for (GrailsCodecClass c in application.codecClasses) {
-            configureCodecMethods c
-        }
-    }
-
-    private configureCodecMethods(codecClass) {
-        String codecName = codecClass.name
-        String encodeMethodName = "encodeAs${codecName}"
-        String decodeMethodName = "decode${codecName}"
-
-        def encoder
-        def decoder
-        if (Environment.current == Environment.DEVELOPMENT) {
-            // Resolve codecs in every call in case of a codec reload
-            encoder = {    ->
-                def encodeMethod = codecClass.getEncodeMethod()
-                if (encodeMethod) {
-                    return encodeMethod(delegate)
-                }
-
-                // note the call to delegate.getClass() instead of the more groovy delegate.class.
-                // this is because the delegate might be a Map, in which case delegate.class doesn't
-                // do what we want here...
-                throw new MissingMethodException(encodeMethodName, delegate.getClass(), []as Object[])
-            }
-
-            decoder = {    ->
-                def decodeMethod = codecClass.getDecodeMethod()
-                if (decodeMethod) {
-                    return decodeMethod(delegate)
-                }
-
-                // note the call to delegate.getClass() instead of the more groovy delegate.class.
-                // this is because the delegate might be a Map, in which case delegate.class doesn't
-                // do what we want here...
-                throw new MissingMethodException(decodeMethodName, delegate.getClass(), []as Object[])
-            }
-        }
-        else {
-            // Resolve codec methods once only at startup
-            def encodeMethod = codecClass.encodeMethod
-            def decodeMethod = codecClass.decodeMethod
-            if (encodeMethod) {
-                encoder = { -> encodeMethod(delegate) }
-            }
-            else {
-                // note the call to delegate.getClass() instead of the more groovy delegate.class.
-                // this is because the delegate might be a Map, in which case delegate.class doesn't
-                // do what we want here...
-                encoder = { -> throw new MissingMethodException(encodeMethodName, delegate.getClass(), []as Object[]) }
-            }
-            if (decodeMethod) {
-                decoder = { -> decodeMethod(delegate) }
-            }
-            else {
-                // note the call to delegate.getClass() instead of the more groovy delegate.class.
-                // this is because the delegate might be a Map, in which case delegate.class doesn't
-                // do what we want here...
-                decoder = { -> throw new MissingMethodException(decodeMethodName, delegate.getClass(), []as Object[]) }
-            }
-        }
-
-        Object.metaClass."${encodeMethodName}" << encoder
-        Object.metaClass."${decodeMethodName}" << decoder
+    def doWithSpring = {
+        codecLookup(DefaultCodecLookup)
     }
 }

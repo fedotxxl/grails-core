@@ -1,4 +1,5 @@
-/* Copyright 2008 the original author or authors.
+/*
+ * Copyright 2008 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +15,7 @@
  */
 package grails.util;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 
 /**
  * Utility methods for converting between different name types,
@@ -391,5 +389,69 @@ public class GrailsNameUtils {
      */
     public static boolean isBlank(String str) {
         return str == null || str.trim().length() == 0;
+    }
+
+    /**
+     * Returns an appropriate property name for the given object. If the object is a collection will append List, Set, Collection or Map to the property name
+     * @param object The object
+     * @return The property name convention
+     */
+    public static String getPropertyNameConvention(Object object) {
+        String suffix = "";
+
+        return getPropertyNameConvention(object, suffix);
+    }
+
+    /**
+     * Returns an appropriate property name for the given object. If the object is a collection will append List, Set, Collection or Map to the property name
+     * @param object The object
+     * @param suffix The suffix to append to the name.
+     * @return The property name convention
+     */
+    public static String getPropertyNameConvention(Object object, String suffix) {
+        if(object != null) {
+            Class<?> type = object.getClass();
+            if(type.isArray()) {
+                return getPropertyName(type.getComponentType()) + suffix + "Array";
+            }
+            else if(object instanceof Collection) {
+                Collection coll = (Collection) object;
+                if(coll.isEmpty()) {
+                    return "emptyCollection";
+                }
+                else {
+                    Object first = coll.iterator().next();
+                    if(coll instanceof List) {
+                        return getPropertyName(first.getClass()) + suffix + "List";
+                    }
+                    else if(coll instanceof Set) {
+                        return getPropertyName(first.getClass()) + suffix + "Set";
+                    }
+                    else {
+                        return getPropertyName(first.getClass()) + suffix + "Collection";
+                    }
+
+                }
+
+            }
+            else if(object instanceof Map) {
+                Map map = (Map)object;
+
+                if(map.isEmpty()) {
+                    return "emptyMap";
+                }
+                else {
+                    Object entry = map.values().iterator().next();
+                    if(entry != null) {
+                        return getPropertyName(entry.getClass()) + suffix + "Map";
+                    }
+                }
+            }
+            else {
+                return getPropertyName(object.getClass()) + suffix;
+            }
+
+        }
+        return null;
     }
 }

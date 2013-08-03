@@ -42,7 +42,7 @@ import org.springframework.web.context.request.RequestContextHolder
  * @author Graeme Rocher
  * @since 2.0
  */
-class PageRenderer implements ApplicationContextAware, ServletContextAware{
+class PageRenderer implements ApplicationContextAware, ServletContextAware {
 
     private GroovyPagesTemplateEngine templateEngine
     GrailsConventionGroovyPageLocator groovyPageLocator
@@ -98,7 +98,6 @@ class PageRenderer implements ApplicationContextAware, ServletContextAware{
      *
      * @return The resulting string contents
      */
-
     void renderTo(Map args, OutputStream stream) {
         renderTo(args, new OutputStreamWriter(stream))
     }
@@ -106,9 +105,8 @@ class PageRenderer implements ApplicationContextAware, ServletContextAware{
     private void renderViewToWriter(Map args, Writer writer) {
         def source
         if (args.view) {
-           source = groovyPageLocator.findViewByPath(args.view.toString())
-        }
-        else if (args.template) {
+            source = groovyPageLocator.findViewByPath(args.view.toString())
+        } else if (args.template) {
             source = groovyPageLocator.findTemplateByPath(args.template.toString())
         }
         if (source == null) {
@@ -118,8 +116,8 @@ class PageRenderer implements ApplicationContextAware, ServletContextAware{
         def oldRequestAttributes = RequestContextHolder.getRequestAttributes()
         try {
             def webRequest = new GrailsWebRequest(PageRenderRequestCreator.createInstance(source.URI),
-                  PageRenderResponseCreator.createInstance(writer instanceof PrintWriter ? writer : new PrintWriter(writer)),
-                  servletContext, applicationContext)
+                PageRenderResponseCreator.createInstance(writer instanceof PrintWriter ? writer : new PrintWriter(writer)),
+                servletContext, applicationContext)
             RequestContextHolder.setRequestAttributes(webRequest)
             def template = templateEngine.createTemplate(source)
             if (template != null) {
@@ -142,143 +140,235 @@ class PageRenderer implements ApplicationContextAware, ServletContextAware{
 
         static HttpServletRequest createInstance(final String requestURI) {
 
-        def params = new ConcurrentHashMap()
-        def attributes = new ConcurrentHashMap()
+            def params = new ConcurrentHashMap()
+            def attributes = new ConcurrentHashMap()
 
-        String contentType
-        String characterEncoding = "UTF-8"
+            String contentType = null
+            String characterEncoding = "UTF-8"
 
-            Proxy.newProxyInstance(HttpServletRequest.classLoader, [HttpServletRequest] as Class[], new InvocationHandler() {
+            (HttpServletRequest)Proxy.newProxyInstance(HttpServletRequest.classLoader, [HttpServletRequest] as Class[], new InvocationHandler() {
                 Object invoke(proxy, Method method, Object[] args) {
 
                     String methodName = method.name
 
-                    if (methodName == 'getContentType') return contentType
+                    if (methodName == 'getContentType') {
+                        return contentType
+                    }
                     if (methodName == 'setContentType') {
                         contentType = args[0]
                         return null
-        }
-                    if (methodName == 'getCharacterEncoding') return characterEncoding
+                    }
+                    if (methodName == 'getCharacterEncoding') {
+                        return characterEncoding
+                    }
                     if (methodName == 'setCharacterEncoding') {
                         characterEncoding = args[0]
-            return null
-        }
+                    }
 
-                    if (methodName == 'getRealPath') return requestURI
-                    if (methodName == 'getLocalName') return "localhost"
-                    if (methodName == 'getLocalAddr') return "127.0.0.1"
-                    if (methodName == 'getLocalPort') return 80
+                    if (methodName == 'getRealPath') {
+                        return requestURI
+                    }
+                    if (methodName == 'getLocalName') {
+                        return "localhost"
+                    }
+                    if (methodName == 'getLocalAddr') {
+                        return "127.0.0.1"
+                    }
+                    if (methodName == 'getLocalPort') {
+                        return 80
+                    }
 
-                    if (methodName == 'getCookies') return ([] as Cookie[])
-                    if (methodName == 'getDateHeader' || methodName == 'getIntHeader') return -1
-                    if (methodName == 'getMethod') return 'GET'
-                    if (methodName == 'getContextPath' || methodName == 'getServletPath') return '/'
+                    if (methodName == 'getCookies') {
+                        return ([] as Cookie[])
+                    }
+                    if (methodName == 'getDateHeader' || methodName == 'getIntHeader') {
+                        return -1
+                    }
+                    if (methodName == 'getMethod') {
+                        return 'GET'
+                    }
+                    if (methodName == 'getContextPath' || methodName == 'getServletPath') {
+                        return '/'
+                    }
 
-                    if (methodName in ['getPathInfo', 'getPathTranslated', 'getQueryString']) return ''
+                    if (methodName in ['getPathInfo', 'getPathTranslated', 'getQueryString']) {
+                        return ''
+                    }
 
-                    if (methodName == 'getRequestURL') return new StringBuffer(requestURI)
-                    if (methodName == 'getRequestURI') return requestURI
+                    if (methodName == 'getRequestURL') {
+                        return new StringBuffer(requestURI)
+                    }
+                    if (methodName == 'getRequestURI') {
+                        return requestURI
+                    }
 
-                    if (methodName == 'isRequestedSessionIdValid') return true
+                    if (methodName == 'isRequestedSessionIdValid') {
+                        return true
+                    }
                     if (methodName in [
                         'isRequestedSessionIdFromCookie', 'isRequestedSessionIdFromURL', 'isRequestedSessionIdFromUrl',
-                        'authenticate', 'isUserInRole', 'isSecure', 'isAsyncStarted', 'isAsyncSupported']) return false
+                        'authenticate', 'isUserInRole', 'isSecure', 'isAsyncStarted', 'isAsyncSupported']) {
+                        return false
+                    }
 
-                    if (methodName == 'getSession') throw new UnsupportedOperationException("You cannot use the session in non-request rendering operations")
-                    if (methodName == 'getInputStream') throw new UnsupportedOperationException("You cannot read the input stream in non-request rendering operations")
-                    if (methodName == 'getProtocol') throw new UnsupportedOperationException("You cannot read the protocol in non-request rendering operations")
-                    if (methodName == 'getScheme') throw new UnsupportedOperationException("You cannot read the scheme in non-request rendering operations")
-                    if (methodName == 'getServerName') throw new UnsupportedOperationException("You cannot read server name in non-request rendering operations")
-                    if (methodName == 'getServerPort') throw new UnsupportedOperationException("You cannot read the server port in non-request rendering operations")
-                    if (methodName == 'getReader') throw new UnsupportedOperationException("You cannot read input in non-request rendering operations")
-                    if (methodName == 'getRemoteAddr') throw new UnsupportedOperationException("You cannot read the remote address in non-request rendering operations")
-                    if (methodName == 'getRemoteHost') throw new UnsupportedOperationException("You cannot read the remote host in non-request rendering operations")
-                    if (methodName == 'getRequestDispatcher') throw new UnsupportedOperationException("You cannot use the request dispatcher in non-request rendering operations")
-                    if (methodName == 'getRemotePort') throw new UnsupportedOperationException("You cannot read the remote port in non-request rendering operations")
+                    if (methodName == 'getSession') {
+                        throw new UnsupportedOperationException("You cannot use the session in non-request rendering operations")
+                    }
+                    if (methodName == 'getInputStream') {
+                        throw new UnsupportedOperationException("You cannot read the input stream in non-request rendering operations")
+                    }
+                    if (methodName == 'getProtocol') {
+                        throw new UnsupportedOperationException("You cannot read the protocol in non-request rendering operations")
+                    }
+                    if (methodName == 'getScheme') {
+                        throw new UnsupportedOperationException("You cannot read the scheme in non-request rendering operations")
+                    }
+                    if (methodName == 'getServerName') {
+                        throw new UnsupportedOperationException("You cannot read server name in non-request rendering operations")
+                    }
+                    if (methodName == 'getServerPort') {
+                        throw new UnsupportedOperationException("You cannot read the server port in non-request rendering operations")
+                    }
+                    if (methodName == 'getReader') {
+                        throw new UnsupportedOperationException("You cannot read input in non-request rendering operations")
+                    }
+                    if (methodName == 'getRemoteAddr') {
+                        throw new UnsupportedOperationException("You cannot read the remote address in non-request rendering operations")
+                    }
+                    if (methodName == 'getRemoteHost') {
+                        throw new UnsupportedOperationException("You cannot read the remote host in non-request rendering operations")
+                    }
+                    if (methodName == 'getRequestDispatcher') {
+                        throw new UnsupportedOperationException("You cannot use the request dispatcher in non-request rendering operations")
+                    }
+                    if (methodName == 'getRemotePort') {
+                        throw new UnsupportedOperationException("You cannot read the remote port in non-request rendering operations")
+                    }
 
-                    if (methodName == 'getParts') return []
+                    if (methodName == 'getParts') {
+                        return []
+                    }
 
-                    if (methodName == 'getAttribute') return attributes[args[0]]
-                    if (methodName == 'getAttributeNames') return attributes.keys()
+                    if (methodName == 'getAttribute') {
+                        return attributes[args[0]]
+                    }
+                    if (methodName == 'getAttributeNames') {
+                        return attributes.keys()
+                    }
                     if (methodName == 'setAttribute') {
                         String name = args[0]
                         Object o = args[1]
                         if (o == null) {
                             attributes.remove name
-        }
-                        else {
-                attributes[name] = o
-            }
+                        } else {
+                            attributes[name] = o
+                        }
                         return null
-        }
+                    }
                     if (methodName == 'removeAttribute') {
                         attributes.remove args[0]
                         return null
-        }
+                    }
 
-                    if (methodName == 'getLocale') return Locale.getDefault()
-                    if (methodName == 'getLocales') return new IteratorEnumeration(Locale.getAvailableLocales().iterator())
+                    if (methodName == 'getLocale') {
+                        return Locale.getDefault()
+                    }
+                    if (methodName == 'getLocales') {
+                        return new IteratorEnumeration(Locale.getAvailableLocales().iterator())
+                    }
 
-                    if (methodName == 'getParameter') return params[args[0]]
-                    if (methodName == 'getParameterNames') return params.keys()
-                    if (methodName == 'getParameterValues') return [] as String[]
-                    if (methodName == 'getParameterMap') return params
+                    if (methodName == 'getParameter') {
+                        return params[args[0]]
+                    }
+                    if (methodName == 'getParameterNames') {
+                        return params.keys()
+                    }
+                    if (methodName == 'getParameterValues') {
+                        return [] as String[]
+                    }
+                    if (methodName == 'getParameterMap') {
+                        return params
+                    }
 
-                    if (methodName == 'getContentLength') return 0
+                    if (methodName == 'getContentLength') {
+                        return 0
+                    }
 
                     if ('getHeaderNames'.equals(methodName) || 'getHeaders'.equals(methodName)) {
                         return Collections.enumeration(Collections.emptySet())
-        }
+                    }
 
                     return null
-        }
+                }
             })
         }
-        }
+    }
 
     static class PageRenderResponseCreator {
 
         static HttpServletResponse createInstance(final PrintWriter writer) {
 
-        String characterEncoding = "UTF-8"
-        String contentType
-        int bufferSize = 0
+            String characterEncoding = "UTF-8"
+            String contentType = null
+            int bufferSize = 0
 
-            Proxy.newProxyInstance(HttpServletResponse.classLoader, [HttpServletResponse] as Class[], new InvocationHandler() {
+            (HttpServletResponse)Proxy.newProxyInstance(HttpServletResponse.classLoader, [HttpServletResponse] as Class[], new InvocationHandler() {
                 Object invoke(proxy, Method method, Object[] args) {
 
                     String methodName = method.name
 
-                    if (methodName == 'getContentType') return contentType
+                    if (methodName == 'getContentType') {
+                        return contentType
+                    }
                     if (methodName == 'setContentType') {
                         contentType = args[0]
                         return null
-        }
-                    if (methodName == 'getCharacterEncoding') return characterEncoding
+                    }
+                    if (methodName == 'getCharacterEncoding') {
+                        return characterEncoding
+                    }
                     if (methodName == 'setCharacterEncoding') {
                         characterEncoding = args[0]
                         return null
-        }
-                    if (methodName == 'getBufferSize') return bufferSize
+                    }
+                    if (methodName == 'getBufferSize') {
+                        return bufferSize
+                    }
                     if (methodName == 'setBufferSize') {
                         bufferSize = args[0]
                         return null
-        }
+                    }
 
-                    if (methodName == 'containsHeader' || methodName == 'isCommitted') return false
+                    if (methodName == 'containsHeader' || methodName == 'isCommitted') {
+                        return false
+                    }
 
-                    if (methodName in ['encodeURL', 'encodeRedirectURL', 'encodeUrl', 'encodeRedirectUrl']) return args[0]
+                    if (methodName in ['encodeURL', 'encodeRedirectURL', 'encodeUrl', 'encodeRedirectUrl']) {
+                        return args[0]
+                    }
 
-                    if (methodName == 'getOutputStream') throw new UnsupportedOperationException("You cannot use the OutputStream in non-request rendering operations. Use getWriter() instead")
+                    if (methodName == 'getWriter') {
+                        writer
+                    }
 
-                    if (methodName == 'getHeaderNames') return []
+                    if (methodName == 'getOutputStream') {
+                        throw new UnsupportedOperationException("You cannot use the OutputStream in non-request rendering operations. Use getWriter() instead")
+                    }
 
-                    if (methodName == 'getLocale') return Locale.getDefault()
+                    if (methodName == 'getHeaderNames') {
+                        return []
+                    }
 
-                    if (methodName == 'getStatus') return 0
+                    if (methodName == 'getLocale') {
+                        return Locale.getDefault()
+                    }
 
-            return null
-        }
+                    if (methodName == 'getStatus') {
+                        return 0
+                    }
+
+                    return null
+                }
             })
         }
     }

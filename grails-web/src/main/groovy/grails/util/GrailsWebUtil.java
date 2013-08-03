@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,8 +154,13 @@ public class GrailsWebUtil {
     public static GrailsWebRequest bindMockWebRequest() {
         ServletContext servletContext = new MockServletContext();
         MockHttpServletRequest request = new MockHttpServletRequest(servletContext);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        return bindMockWebRequest(servletContext, request, response);
+    }
+
+    private static GrailsWebRequest bindMockWebRequest(ServletContext servletContext, MockHttpServletRequest request, MockHttpServletResponse response) {
         GrailsWebRequest webRequest = new GrailsWebRequest(request,
-                new MockHttpServletResponse(), servletContext);
+                                                response, servletContext);
         request.setAttribute(GrailsApplicationAttributes.WEB_REQUEST, webRequest);
         RequestContextHolder.setRequestAttributes(webRequest);
         return webRequest;

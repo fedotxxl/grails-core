@@ -58,6 +58,11 @@ public interface GrailsControllerClass extends InjectableGrailsClass {
      */
     String VIEW = "view";
 
+    /**
+     * The name of the namespace property
+     */
+    String NAMESPACE_PROPERTY = "namespace";
+
 
     /**
      * Checks to see if an action is accessible via a particular http method.
@@ -136,6 +141,11 @@ public interface GrailsControllerClass extends InjectableGrailsClass {
      * @return The view for the specified closure action
      */
     String getViewByName(String closureName);
+
+    /**
+     * @return the namespace of this controller, null if none was specified
+     */
+    String getNamespace();
 
     /**
      * Returns a closure property name for a specific URI or null if the URI does not map to a closure.

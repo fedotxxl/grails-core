@@ -15,7 +15,8 @@
  */
 package org.codehaus.groovy.grails.web.taglib
 
-import grails.util.Environment;
+import grails.util.Environment
+import groovy.transform.CompileStatic;
 
 import org.codehaus.groovy.grails.commons.GrailsApplication
 import org.codehaus.groovy.grails.web.pages.GroovyPage
@@ -29,12 +30,13 @@ import org.codehaus.groovy.grails.web.pages.TagLibraryLookup
  * @author Graeme Rocher
  * @since 1.0
  */
+@CompileStatic
 class NamespacedTagDispatcher extends GroovyObjectSupport {
     protected String namespace
     protected GrailsApplication application
     protected Class type
     protected TagLibraryLookup lookup
-    protected boolean developmentMode;
+    protected boolean developmentMode
 
     NamespacedTagDispatcher(String ns, Class callingType, GrailsApplication application, TagLibraryLookup lookup) {
         this.namespace = ns
@@ -55,7 +57,7 @@ class NamespacedTagDispatcher extends GroovyObjectSupport {
         }
     }
 
-    def methodMissing(String name, args) {
+    def methodMissing(String name, Object args) {
         GroovyPagesMetaUtils.methodMissingForTagLib(getMetaClass(), type, lookup, namespace, name, args, !developmentMode)
     }
 }

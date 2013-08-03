@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +40,7 @@ public interface GrailsApplicationAttributes extends ApplicationAttributes {
     String ASYNC_STARTED = "org.codehaus.groovy.grails.ASYNC_STARTED";
     String CONTENT_FORMAT = "org.codehaus.groovy.grails.CONTENT_FORMAT";
     String RESPONSE_FORMAT = "org.codehaus.groovy.grails.RESPONSE_FORMAT";
+    String RESPONSE_MIME_TYPE = "org.codehaus.groovy.grails.RESPONSE_MIME_TYPE";
     String REQUEST_FORMATS = "org.codehaus.groovy.grails.REQUEST_FORMATS";
     String RESPONSE_FORMATS = "org.codehaus.groovy.grails.RESPONSE_FORMATS";
     String FLASH_SCOPE = "org.codehaus.groovy.grails.FLASH_SCOPE";

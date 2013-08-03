@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,8 +41,8 @@ public class GSPSitemeshPage extends AbstractHTMLPage implements Content{
     StreamCharBuffer bodyBuffer;
     StreamCharBuffer pageBuffer;
     StreamCharBuffer titleBuffer;
-    boolean used = false;
-    boolean titleCaptured = false;
+    boolean used;
+    boolean titleCaptured;
     Map<String, StreamCharBuffer> contentBuffers;
     private boolean renderingLayout;
 
@@ -50,7 +51,19 @@ public class GSPSitemeshPage extends AbstractHTMLPage implements Content{
     }
 
     public GSPSitemeshPage(boolean renderingLayout) {
+        reset();
         this.renderingLayout=renderingLayout;
+    }
+
+    public void reset() {
+        headBuffer=null;
+        bodyBuffer=null;
+        pageBuffer=null;
+        titleBuffer=null;
+        used = false;
+        titleCaptured = false;
+        contentBuffers = null;
+        renderingLayout = false;
     }
 
     public void addProperty(String name, Object value) {
@@ -71,13 +84,16 @@ public class GSPSitemeshPage extends AbstractHTMLPage implements Content{
 
         if (titleCaptured) {
             if (titleBuffer != null) {
+                int headlen = headBuffer.length();
                 titleBuffer.clear();
-                headBuffer.writeTo(out);
-            } else {
-                String headAsString = headBuffer.toString();
-                // strip out title for sitemesh version of <head>
-                out.write(headAsString.replaceFirst("<title(\\s[^>]*)?>(.*?)</title>",""));
+                if (headBuffer.length() < headlen) {
+                    headBuffer.writeTo(out);
+                    return;
+                }
             }
+            String headAsString = headBuffer.toString();
+            // strip out title for sitemesh version of <head>
+            out.write(headAsString.replaceFirst("<title(\\s[^>]*)?>(.*?)</title>",""));
         }
         else {
             headBuffer.writeTo(out);

@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.web.servlet.mvc;
 
 /**
@@ -57,4 +56,9 @@ public interface GrailsRequestStateLookupStrategy {
      * @return The action name or null if not known
      */
     public String getActionName();
+
+    /**
+     * @return The HTTP method
+     */
+    public String getHttpMethod();
 }

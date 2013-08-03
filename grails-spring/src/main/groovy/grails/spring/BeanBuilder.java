@@ -74,11 +74,11 @@ import org.springframework.util.Assert;
  *
  * <pre>
  * import org.hibernate.SessionFactory
- * import org.apache.commons.dbcp.BasicDataSource
+ * import org.apache.tomcat.jdbc.pool.DataSource
  *
  * BeanBuilder builder = new BeanBuilder()
  * builder.beans {
- *   dataSource(BasicDataSource) {                  // <--- invokeMethod
+ *   dataSource(DataSource) {                  // <--- invokeMethod
  *      driverClassName = "org.h2.Driver"
  *      url = "jdbc:h2:mem:grailsDB"
  *      username = "sa"                            // <-- setProperty
@@ -162,7 +162,7 @@ public class BeanBuilder extends GroovyObjectSupport {
         initializeBeanBuilderForClassLoader(classLoader);
     }
 
-    protected void initializeBeanBuilderForClassLoader(@SuppressWarnings("hiding") ClassLoader classLoader) {
+    protected void initializeBeanBuilderForClassLoader(ClassLoader classLoader) {
         xmlBeanDefinitionReader.setBeanClassLoader(classLoader);
         namespaceHandlerResolver = new DefaultNamespaceHandlerResolver(this.classLoader);
         readerContext = new XmlReaderContext(beanBuildResource, new FailFastProblemReporter(), new EmptyReaderEventListener(),
@@ -606,8 +606,7 @@ public class BeanBuilder extends GroovyObjectSupport {
         deferredProperties.clear();
     }
 
-    protected boolean addToDeferred(@SuppressWarnings("unused") BeanConfiguration beanConfig,
-            String property, Object newValue) {
+    protected boolean addToDeferred(BeanConfiguration beanConfig, String property, Object newValue) {
         if (newValue instanceof List) {
             deferredProperties.put(currentBeanConfig.getName() + property,
                     new DeferredProperty(currentBeanConfig, property, newValue));
@@ -718,7 +717,7 @@ public class BeanBuilder extends GroovyObjectSupport {
         for (int i = 0; i < constructorArgs.length; i++) {
             if (constructorArgs[i] instanceof List) {
                 constructorArgs[i] = manageListIfNecessary(constructorArgs[i]);
-            } else if(constructorArgs[i] instanceof Map) {
+            } else if (constructorArgs[i] instanceof Map) {
                 constructorArgs[i] = manageMapIfNecessary(constructorArgs[i]);
             }
         }

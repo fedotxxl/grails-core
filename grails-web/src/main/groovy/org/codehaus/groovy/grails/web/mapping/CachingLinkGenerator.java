@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.web.mapping;
 
 import java.util.Map;
@@ -149,9 +148,9 @@ public class CachingLinkGenerator extends DefaultLinkGenerator {
     protected String makeKey(String prefix, Map attrs) {
         StringBuilder sb=new StringBuilder();
         sb.append(prefix);
-        if(getConfiguredServerBaseURL()==null && isAbsolute(attrs)) {
+        if (getConfiguredServerBaseURL()==null && isAbsolute(attrs)) {
             GrailsWebRequest webRequest = GrailsWebRequest.lookup();
-            if(webRequest != null) {
+            if (webRequest != null) {
                 sb.append(webRequest.getBaseUrl());
             }
         }

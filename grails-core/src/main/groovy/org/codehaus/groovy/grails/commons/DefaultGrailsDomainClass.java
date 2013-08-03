@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -283,7 +284,6 @@ public class DefaultGrailsDomainClass extends AbstractGrailsClass implements Gra
         // is it a relationship
         Class<?> relatedClassType = getRelatedClassType(property.getName());
 
-
         if (relatedClassType != null) {
             // set the referenced type in the property
             associations.add(property);
@@ -508,7 +508,6 @@ public class DefaultGrailsDomainClass extends AbstractGrailsClass implements Gra
 
         // establish relationship to type
         Map relatedClassRelationships = GrailsDomainConfigurationUtil.getAssociationMap(propType);
-        @SuppressWarnings("hiding")
         Map mappedBy = GrailsDomainConfigurationUtil.getMappedByMap(propType);
 
         Class<?> relatedClassPropertyType = null;
@@ -569,7 +568,7 @@ public class DefaultGrailsDomainClass extends AbstractGrailsClass implements Gra
     }
 
     private boolean isNotMappedToDifferentProperty(GrailsDomainClassProperty property,
-            String relatedClassPropertyName, @SuppressWarnings("hiding") Map mappedBy) {
+            String relatedClassPropertyName, Map mappedBy) {
 
         String mappedByForRelation = (String)mappedBy.get(relatedClassPropertyName);
         if (mappedByForRelation == null) return true;

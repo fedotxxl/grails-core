@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 Graeme Rocher
+/*
+ * Copyright 2004-2005 Graeme Rocher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +56,6 @@ public class DomainBuilder extends ObjectGraphBuilder {
             }
         }
 
-        @SuppressWarnings("unused")
         private boolean isCollection(Object parent, Object child, String parentName, String propertyName) {
             try {
                 Field field = parent.getClass().getDeclaredField(propertyName);

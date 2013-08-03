@@ -12,6 +12,8 @@ class BuildSettingsTests extends GroovyTestCase {
     private Map savedSystemProps
 
     protected void setUp() {
+        Metadata.reset()
+
         def props = new Properties()
         final buildProps = new File("../build.properties")
         if (!buildProps.exists()) {
@@ -296,7 +298,8 @@ class MockBuildSettings extends BuildSettings {
 
     static version
 
-    @Override protected loadBuildPropertiesFromClasspath(Properties buildProps) {
+    @Override
+    protected void loadBuildPropertiesFromClasspath(Properties buildProps) {
         buildProps['grails.version'] = version
     }
 }

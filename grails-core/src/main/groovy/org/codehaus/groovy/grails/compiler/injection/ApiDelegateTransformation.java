@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.codehaus.groovy.grails.compiler.injection;
 
 import org.codehaus.groovy.GroovyBugError;
@@ -27,6 +26,7 @@ import org.codehaus.groovy.transform.ASTTransformation;
 import org.codehaus.groovy.transform.GroovyASTTransformation;
 
 import java.util.Arrays;
+import java.util.Map;
 
 /**
  * The logic for the {@link grails.artefact.ApiDelegate} location transform.
@@ -54,7 +54,11 @@ public class ApiDelegateTransformation implements ASTTransformation{
                 supportedType = value.getType();
             }
 
-            GrailsASTUtils.addDelegateInstanceMethods(supportedType,owner,type, new VariableExpression(fieldNode.getName()));
+            GrailsASTUtils.addDelegateInstanceMethods(supportedType, owner, type, new VariableExpression(fieldNode.getName()), resolveGenericsPlaceHolders(supportedType));
         }
     }
+    
+    protected Map<String, ClassNode> resolveGenericsPlaceHolders(ClassNode classNode) {
+        return null;
+    }    
 }

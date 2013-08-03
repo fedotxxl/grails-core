@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,7 +86,7 @@ public class GrailsViewResolver extends InternalResourceViewResolver implements 
             return createGrailsView(viewName);
         }
 
-        String viewCacheKey = GrailsConventionGroovyPageLocator.resolveViewFormat(viewName);
+        String viewCacheKey = groovyPageLocator.resolveViewFormat(viewName);
 
         CacheEntry<View> entry = VIEW_CACHE.get(viewCacheKey);
 
@@ -101,7 +102,7 @@ public class GrailsViewResolver extends InternalResourceViewResolver implements 
             }
         };
 
-        View view=null;
+        View view = null;
         if (entry == null) {
             try {
                 view = updater.run();
@@ -149,7 +150,7 @@ public class GrailsViewResolver extends InternalResourceViewResolver implements 
             grailsApplication = getApplicationContext().getBean(GrailsApplication.APPLICATION_ID, GrailsApplication.class);
         }
 
-        GroovyPageScriptSource scriptSource = null;
+        GroovyPageScriptSource scriptSource;
         if (controller == null) {
             scriptSource = groovyPageLocator.findViewByPath(viewName);
         }

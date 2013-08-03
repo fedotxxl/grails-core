@@ -25,29 +25,19 @@ import org.codehaus.groovy.grails.plugins.GrailsPluginInfo
  * @since 0.5.5
  */
 
-includeTargets << grailsScript("_GrailsPlugins")
-
+includeTargets << grailsScript("_GrailsClean")
+includeTargets << grailsScript("_GrailsPackage")
+includeTargets << grailsScript("_PluginDependencies")
 
 target(listPlugins: "Implementation target") {
     depends(parseArguments,configureProxy)
 
-    def repository = argsMap.repository
-    if (repository) {
-        eachRepository { name, url ->
-            if (name == repository) {
-                printRemotePluginList(repository)
-                printInstalledPlugins()
-            }
-        }
-    }
-    else if (argsMap.installed) {
+    if (argsMap.installed) {
         printInstalledPlugins()
     }
     else {
-        eachRepository { name, url ->
-            printRemotePluginList(name)
-            return true
-        }
+        pluginsList = grailsSettings.dependencyManager.downloadPluginList(new File(grailsWorkDir, "plugins-list-grailsCentral.xml"))
+        printRemotePluginList("grailsCentral")
         printInstalledPlugins()
     }
 
@@ -87,6 +77,7 @@ private printRemotePluginList(name) {
     def plugins = []
     use(DOMCategory) {
         pluginsList?.'plugin'.each {plugin ->
+
             def version
             def pluginLine = plugin.'@name'
             def versionLine = "<no releases>"

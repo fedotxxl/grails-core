@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,7 +89,7 @@ public class RenderInputTag extends RequestContextTag {
         }
         catch (BeansException e) {
             throw new GrailsTagException("Property [" + property +
-                    "] is not a valid bean property in tag [renderInput]:" + e.getMessage(),e);
+                    "] is not a valid bean property in tag [" + TAG_NAME + "]:" + e.getMessage(),e);
         }
         GroovyPagesTemplateEngine engine = (GroovyPagesTemplateEngine)servletContext.getAttribute(
                 GrailsApplicationAttributes.GSP_TEMPLATE_ENGINE);
@@ -99,7 +100,7 @@ public class RenderInputTag extends RequestContextTag {
             t = engine.createTemplate(uri);
             if (t == null) {
                 throw new GrailsTagException("Type [" + pd.getPropertyType() +
-                        "] is unsupported by tag [scaffold]. No template found.");
+                        "] is unsupported by tag [" + TAG_NAME + "]. No template found.");
             }
 
             Map<String, Object> binding = new HashMap<String, Object>();

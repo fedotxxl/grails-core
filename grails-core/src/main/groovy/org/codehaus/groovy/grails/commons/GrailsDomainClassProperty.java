@@ -1,4 +1,5 @@
-/* Copyright 2004-2005 the original author or authors.
+/*
+ * Copyright 2004-2005 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +45,8 @@ public interface GrailsDomainClassProperty {
     String SORT = "sort";
     String EMBEDDED = "embedded";
     String ERRORS = "errors";
+    String DIRTY = "dirty";
+    String DIRTY_PROPERTY_NAMES = "dirtyPropertyNames";
     String DEFAULT_DATA_SOURCE = "DEFAULT";
     String ALL_DATA_SOURCES = "ALL";
     int FETCH_EAGER = 1;
@@ -186,6 +189,23 @@ public interface GrailsDomainClassProperty {
      * @param referencedProperty
      */
     void setOtherSide(GrailsDomainClassProperty referencedProperty);
+
+    /**
+     * Check whether this property is set up to receive save-update cascading via the Mapping DSL rather than
+     * using 'belongsTo'.
+     * @return True if this property is explicitly defined to receive save and update cascades, false otherwise.
+     */
+    boolean isExplicitSaveUpdateCascade();
+
+    /**
+     * Sets whether the domain class property is explicitly set up to receive
+     * save and update cascades via a means other than 'belongsTo'.  Specifically,
+     * the cascades will have been set up via the Mapping DSL.
+     *
+     * @param explicitSaveUpdateCascade Whether this property is explicity defined, via
+     * the mapping DSL, to receive save and update cascades.
+     */
+    void setExplicitSaveUpdateCascade(boolean explicitSaveUpdateCascade);
 
     /**
      * Whether the property is inherited from a super class.
