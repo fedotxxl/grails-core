@@ -43,7 +43,7 @@ public class DirectoryWatcher extends Thread {
     public DirectoryWatcher() {
         setDaemon(true);
 
-        watcher = new SavedDirectoryWatcher(new RecursiveDirectoryWatcher());
+        watcher = new SavedDirectoryWatcher(new RecursiveDirectoryWatcher()); //
         windowsBaseDirectoryWatcher = new WindowsBaseDirectoryWatcher(getBase());
     }
 
