@@ -16,10 +16,13 @@
 
 package org.codehaus.groovy.grails.compiler;
 
+import io.belov.grails.FileUtils;
 import io.belov.grails.RecursiveDirectoryWatcher;
 import io.belov.grails.SavedDirectoryWatcher;
 import io.belov.grails.filters.CompositeFilter;
 import io.belov.grails.filters.EndsWithFilter;
+import io.belov.grails.win.WindowsBaseDirectoryWatcher;
+import org.apache.commons.lang.SystemUtils;
 
 import java.io.File;
 import java.util.List;
@@ -34,10 +37,14 @@ public class DirectoryWatcher extends Thread {
 
     public static final String SVN_DIR_NAME = ".svn";
     private SavedDirectoryWatcher watcher;
+    private WindowsBaseDirectoryWatcher windowsBaseDirectoryWatcher;
+    private File base;
 
     public DirectoryWatcher() {
         setDaemon(true);
+
         watcher = new SavedDirectoryWatcher(new RecursiveDirectoryWatcher());
+        windowsBaseDirectoryWatcher = new WindowsBaseDirectoryWatcher(getBase());
     }
 
     /**
@@ -64,7 +71,7 @@ public class DirectoryWatcher extends Thread {
      * @param listener The file listener
      */
     public void addListener(final FileChangeListener listener) {
-        watcher.addListener(new io.belov.grails.FileChangeListener() {
+        io.belov.grails.FileChangeListener l = new io.belov.grails.FileChangeListener() {
             @Override
             public void onChange(File file) {
                 listener.onChange(file);
@@ -79,7 +86,10 @@ public class DirectoryWatcher extends Thread {
             public void onCreate(File file) {
                 listener.onNew(file);
             }
-        });
+        };
+
+        watcher.addListener(l);
+        windowsBaseDirectoryWatcher.addListener(l);
     }
 
     /**
@@ -88,7 +98,7 @@ public class DirectoryWatcher extends Thread {
      * @param fileToWatch The file to watch
      */
     public void addWatchFile(File fileToWatch) {
-        watcher.addWatchFile(fileToWatch.toPath());
+        getDirectoryWatcherForFile(fileToWatch).addWatchFile(fileToWatch.toPath());
     }
 
     /**
@@ -104,7 +114,7 @@ public class DirectoryWatcher extends Thread {
             compositeFilter.add(new EndsWithFilter(extension));
         }
 
-        watcher.addWatchDirectory(dir.toPath(), compositeFilter);
+        getDirectoryWatcherForFile(dir).addWatchDirectory(dir.toPath(), compositeFilter);
     }
 
     /**
@@ -114,7 +124,7 @@ public class DirectoryWatcher extends Thread {
      * @param extension The extension
      */
     public void addWatchDirectory(File dir, String extension) {
-        watcher.addWatchDirectory(dir.toPath(), new EndsWithFilter(extension));
+        getDirectoryWatcherForFile(dir).addWatchDirectory(dir.toPath(), new EndsWithFilter(extension));
     }
 
     /**
@@ -138,7 +148,24 @@ public class DirectoryWatcher extends Thread {
 
     @Override
     public void run() {
+        windowsBaseDirectoryWatcher.start();
         watcher.start();
+    }
+
+    private File getBase() {
+        if (this.base == null) {
+            this.base = (File) FileUtils.getNormalizedFile(new File("."));
+        }
+
+        return this.base;
+    }
+
+    private io.belov.grails.DirectoryWatcher getDirectoryWatcherForFile(File file) {
+        return (isBaseFile(file)) ? windowsBaseDirectoryWatcher : watcher;
+    }
+
+    private boolean isBaseFile(File file) {
+        return (SystemUtils.IS_OS_WINDOWS && FileUtils.isParentOf(getBase(), file));
     }
 
 }
