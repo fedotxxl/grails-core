@@ -16,16 +16,12 @@
 
 package org.codehaus.groovy.grails.compiler;
 
-import io.belov.grails.FileUtils;
-import io.belov.grails.RecursiveDirectoryWatcher;
-import io.belov.grails.SavedDirectoryWatcher;
-import io.belov.grails.filters.CompositeFilter;
-import io.belov.grails.filters.EndsWithFilter;
-import io.belov.grails.win.WindowsBaseDirectoryWatcher;
-import org.apache.commons.lang.SystemUtils;
+import org.springframework.util.StringUtils;
 
 import java.io.File;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Utility class to watch directories for changes.
@@ -36,15 +32,17 @@ import java.util.List;
 public class DirectoryWatcher extends Thread {
 
     public static final String SVN_DIR_NAME = ".svn";
-    private SavedDirectoryWatcher watcher;
-    private WindowsBaseDirectoryWatcher windowsBaseDirectoryWatcher;
-    private File base;
+    protected Collection<String> extensions = new ConcurrentLinkedQueue<String>();
+    private List<FileChangeListener> listeners = new ArrayList<FileChangeListener>();
+
+    private Map<File, Long> lastModifiedMap = new ConcurrentHashMap<File, Long>();
+    private Map<File, Collection<String>> directoryToExtensionsMap = new ConcurrentHashMap<File, Collection<String>>();
+    private Map<File, Long> directoryWatch = new ConcurrentHashMap<File, Long>();
+    private boolean active = true;
+    private long sleepTime = 3000;
 
     public DirectoryWatcher() {
         setDaemon(true);
-
-        watcher = new SavedDirectoryWatcher(new RecursiveDirectoryWatcher()); //
-        windowsBaseDirectoryWatcher = new WindowsBaseDirectoryWatcher(getBase());
     }
 
     /**
@@ -53,7 +51,7 @@ public class DirectoryWatcher extends Thread {
      * @param active False if you want to stop watching
      */
     public void setActive(boolean active) {
-        watcher.setActive(active);
+        this.active = active;
     }
 
     /**
@@ -62,7 +60,7 @@ public class DirectoryWatcher extends Thread {
      * @param sleepTime The sleep time
      */
     public void setSleepTime(long sleepTime) {
-        //do nothing
+        this.sleepTime = sleepTime;
     }
 
     /**
@@ -70,26 +68,8 @@ public class DirectoryWatcher extends Thread {
      *
      * @param listener The file listener
      */
-    public void addListener(final FileChangeListener listener) {
-        io.belov.grails.FileChangeListener l = new io.belov.grails.FileChangeListener() {
-            @Override
-            public void onChange(File file) {
-                listener.onChange(file);
-            }
-
-            @Override
-            public void onDelete(File file) {
-                //do nothing
-            }
-
-            @Override
-            public void onCreate(File file) {
-                listener.onNew(file);
-            }
-        };
-
-        watcher.addListener(l);
-        windowsBaseDirectoryWatcher.addListener(l);
+    public void addListener(FileChangeListener listener) {
+        listeners.add(listener);
     }
 
     /**
@@ -98,7 +78,7 @@ public class DirectoryWatcher extends Thread {
      * @param fileToWatch The file to watch
      */
     public void addWatchFile(File fileToWatch) {
-        getDirectoryWatcherForFile(fileToWatch).addWatchFile(fileToWatch.toPath());
+        lastModifiedMap.put(fileToWatch, fileToWatch.lastModified());
     }
 
     /**
@@ -108,13 +88,18 @@ public class DirectoryWatcher extends Thread {
      * @param fileExtensions The extensions
      */
     public void addWatchDirectory(File dir, List<String> fileExtensions) {
-        CompositeFilter compositeFilter = new CompositeFilter();
+        trackDirectoryExtensions(dir, fileExtensions);
+        cacheFilesForDirectory(dir, fileExtensions, false);
+    }
 
-        for (String extension : fileExtensions) {
-            compositeFilter.add(new EndsWithFilter(extension));
+    protected void trackDirectoryExtensions(File dir, List<String> fileExtensions) {
+        Collection<String> existingExtensions = directoryToExtensionsMap.get(dir);
+        if(existingExtensions == null) {
+            directoryToExtensionsMap.put(dir, new ArrayList<String>(fileExtensions));
         }
-
-        getDirectoryWatcherForFile(dir).addWatchDirectory(dir.toPath(), compositeFilter);
+        else {
+            existingExtensions.addAll(fileExtensions);
+        }
     }
 
     /**
@@ -124,7 +109,16 @@ public class DirectoryWatcher extends Thread {
      * @param extension The extension
      */
     public void addWatchDirectory(File dir, String extension) {
-        getDirectoryWatcherForFile(dir).addWatchDirectory(dir.toPath(), new EndsWithFilter(extension));
+        extension = removeStartingDotIfPresent(extension);
+        List<String> fileExtensions = new ArrayList<String>();
+        if (!StringUtils.hasText(extension)) {
+            fileExtensions.add("*");
+        }
+        else {
+            fileExtensions.add(extension);
+        }
+        trackDirectoryExtensions(dir, fileExtensions);
+        cacheFilesForDirectory(dir, fileExtensions, false);
     }
 
     /**
@@ -148,24 +142,99 @@ public class DirectoryWatcher extends Thread {
 
     @Override
     public void run() {
-        windowsBaseDirectoryWatcher.start();
-        watcher.start();
+        int count = 0;
+        while (active) {
+            Set<File> files = lastModifiedMap.keySet();
+            for (File file : files) {
+                long currentLastModified = file.lastModified();
+                Long cachedTime = lastModifiedMap.get(file);
+                if (currentLastModified > cachedTime) {
+                    lastModifiedMap.put(file, currentLastModified);
+                    fireOnChange(file);
+                }
+            }
+            try {
+                count++;
+                if (count > 2) {
+                    count = 0;
+                    checkForNewFiles();
+                }
+                sleep(sleepTime);
+            } catch (InterruptedException e) {
+                // ignore
+            }
+        }
     }
 
-    private File getBase() {
-        if (this.base == null) {
-            this.base = (File) FileUtils.getNormalizedFile(new File("."));
+    private void fireOnChange(File file) {
+        for (FileChangeListener listener : listeners) {
+            listener.onChange(file);
+        }
+    }
+
+    private void checkForNewFiles() {
+        for (File directory : directoryWatch.keySet()) {
+            final Long currentTimestamp = directoryWatch.get(directory);
+
+            if (currentTimestamp < directory.lastModified()) {
+                Collection<String> extensions = directoryToExtensionsMap.get(directory);
+                if(extensions == null) {
+                    extensions = this.extensions;
+                }
+                cacheFilesForDirectory(directory, extensions, true);
+            }
+        }
+    }
+
+    private void cacheFilesForDirectory(File directory, Collection<String> fileExtensions, boolean fireEvent) {
+        addExtensions(fileExtensions);
+
+        directoryWatch.put(directory, directory.lastModified());
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return;
         }
 
-        return this.base;
+        for (File file : files) {
+            if (file.isDirectory() && !file.isHidden()) {
+                if (!SVN_DIR_NAME.equals(file.getName())) {
+                    cacheFilesForDirectory(file, fileExtensions, fireEvent);
+                }
+            }
+            else if (isValidFileToMonitor(file, fileExtensions)) {
+                if (!lastModifiedMap.containsKey(file) && fireEvent) {
+                    for (FileChangeListener listener : listeners) {
+                        listener.onNew(file);
+                    }
+                }
+                lastModifiedMap.put(file, file.lastModified());
+            }
+        }
     }
 
-    private io.belov.grails.DirectoryWatcher getDirectoryWatcherForFile(File file) {
-        return (isBaseFile(file)) ? windowsBaseDirectoryWatcher : watcher;
+    private void addExtensions(Collection<String> toAdd) {
+        for (String extension : toAdd) {
+            extension = removeStartingDotIfPresent(extension);
+            if (!extensions.contains(extension)) {
+                extensions.add(extension);
+            }
+        }
     }
 
-    private boolean isBaseFile(File file) {
-        return (SystemUtils.IS_OS_WINDOWS && FileUtils.isParentOf(getBase(), file));
+    private String removeStartingDotIfPresent(String extension) {
+        if (extension.startsWith(".")) {
+            extension = extension.substring(1);
+        }
+        return extension;
     }
 
+    private boolean isValidFileToMonitor(File file, Collection<String> fileExtensions) {
+        String name = file.getName();
+        String path = file.getAbsolutePath();
+        boolean isSvnFile = path.indexOf(File.separator + SVN_DIR_NAME + File.separator) > 0;
+        return !isSvnFile &&
+            !file.isHidden() &&
+            !file.getName().startsWith(".") &&
+            (fileExtensions.contains("*") || fileExtensions.contains(StringUtils.getFilenameExtension(name)));
+    }
 }
