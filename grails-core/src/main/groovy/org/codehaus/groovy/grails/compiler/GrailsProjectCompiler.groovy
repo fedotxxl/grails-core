@@ -29,6 +29,7 @@ import org.codehaus.groovy.grails.plugins.build.scopes.PluginScopeInfo
 import grails.util.Environment
 import org.apache.tools.ant.AntTypeDefinition
 import org.apache.tools.ant.ComponentHelper
+import org.codehaus.groovy.grails.compiler.watchers.PoolingDirectoryWatcher
 
 /**
  * Encapsulates the compilation logic required for a Grails application.
@@ -105,7 +106,7 @@ class GrailsProjectCompiler {
 
         for (dir in new File(basedir, "grails-app").listFiles()) {
             if (dir == null) continue
-            if (!excludedPaths?.contains(dir.name) && dir.isDirectory() && !DirectoryWatcher.SVN_DIR_NAME.equals(dir.name)) {
+            if (!excludedPaths?.contains(dir.name) && dir.isDirectory() && !PoolingDirectoryWatcher.SVN_DIR_NAME.equals(dir.name)) {
                 srcDirectories << dir.toString()
             }
         }

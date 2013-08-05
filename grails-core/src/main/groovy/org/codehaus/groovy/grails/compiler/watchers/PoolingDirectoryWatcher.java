@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.codehaus.groovy.grails.compiler;
+package org.codehaus.groovy.grails.compiler.watchers;
 
 import org.springframework.util.StringUtils;
 
@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * @author Graeme Rocher
  * @since 2.0
  */
-public class DirectoryWatcher extends Thread {
+public class PoolingDirectoryWatcher implements DirectoryWatcher {
 
     public static final String SVN_DIR_NAME = ".svn";
     protected Collection<String> extensions = new ConcurrentLinkedQueue<String>();
@@ -41,8 +41,7 @@ public class DirectoryWatcher extends Thread {
     private boolean active = true;
     private long sleepTime = 3000;
 
-    public DirectoryWatcher() {
-        setDaemon(true);
+    public PoolingDirectoryWatcher() {
     }
 
     /**
@@ -50,6 +49,7 @@ public class DirectoryWatcher extends Thread {
      *
      * @param active False if you want to stop watching
      */
+    @Override
     public void setActive(boolean active) {
         this.active = active;
     }
@@ -68,6 +68,7 @@ public class DirectoryWatcher extends Thread {
      *
      * @param listener The file listener
      */
+    @Override
     public void addListener(FileChangeListener listener) {
         listeners.add(listener);
     }
@@ -77,6 +78,7 @@ public class DirectoryWatcher extends Thread {
      *
      * @param fileToWatch The file to watch
      */
+    @Override
     public void addWatchFile(File fileToWatch) {
         lastModifiedMap.put(fileToWatch, fileToWatch.lastModified());
     }
@@ -87,6 +89,7 @@ public class DirectoryWatcher extends Thread {
      * @param dir The directory
      * @param fileExtensions The extensions
      */
+    @Override
     public void addWatchDirectory(File dir, List<String> fileExtensions) {
         trackDirectoryExtensions(dir, fileExtensions);
         cacheFilesForDirectory(dir, fileExtensions, false);
@@ -108,6 +111,7 @@ public class DirectoryWatcher extends Thread {
      * @param dir The directory
      * @param extension The extension
      */
+    @Override
     public void addWatchDirectory(File dir, String extension) {
         extension = removeStartingDotIfPresent(extension);
         List<String> fileExtensions = new ArrayList<String>();
@@ -119,25 +123,6 @@ public class DirectoryWatcher extends Thread {
         }
         trackDirectoryExtensions(dir, fileExtensions);
         cacheFilesForDirectory(dir, fileExtensions, false);
-    }
-
-    /**
-     * Interface for FileChangeListeners
-     */
-    public static interface FileChangeListener {
-        /**
-         * Fired when a file changes
-         *
-         * @param file The file that changed
-         */
-        void onChange(File file);
-
-        /**
-         * Fired when a new file is created
-         *
-         * @param file The file that was created
-         */
-        void onNew(File file);
     }
 
     @Override
@@ -159,7 +144,7 @@ public class DirectoryWatcher extends Thread {
                     count = 0;
                     checkForNewFiles();
                 }
-                sleep(sleepTime);
+                Thread.sleep(sleepTime);
             } catch (InterruptedException e) {
                 // ignore
             }

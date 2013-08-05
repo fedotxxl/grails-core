@@ -15,12 +15,8 @@
  */
 package org.codehaus.groovy.grails.compiler;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.SystemUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.tools.ant.BuildException;
@@ -28,6 +24,7 @@ import org.codehaus.groovy.control.CompilationFailedException;
 import org.codehaus.groovy.control.MultipleCompilationErrorsException;
 import org.codehaus.groovy.grails.cli.agent.GrailsPluginManagerReloadPlugin;
 import org.codehaus.groovy.grails.commons.ClassPropertyFetcher;
+import org.codehaus.groovy.grails.compiler.watchers.*;
 import org.codehaus.groovy.grails.io.support.GrailsResourceUtils;
 import org.codehaus.groovy.grails.plugins.DefaultGrailsPluginManager;
 import org.codehaus.groovy.grails.plugins.GrailsPlugin;
@@ -37,13 +34,19 @@ import org.codehaus.groovy.grails.plugins.support.WatchPattern;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.util.ClassUtils;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Watches a Grails projects and re-compiles sources when they change or fires events to the pluginManager.
  *
  * @author Graeme Rocher
  * @since 2.0
  */
-public class GrailsProjectWatcher extends DirectoryWatcher {
+public class GrailsProjectWatcher extends Thread implements DirectoryWatcher {
 
     private static final Log LOG = LogFactory.getLog(GrailsProjectWatcher.class);
     private static final Map<String, ClassUpdate> classChangeEventQueue = new ConcurrentHashMap<String, ClassUpdate>();
@@ -60,10 +63,18 @@ public class GrailsProjectWatcher extends DirectoryWatcher {
     private static List<String> reloadExcludes;
     private static List<String> reloadIncludes;
 
+    private DirectoryWatcher projectWatcher = null;
+    private DirectoryWatcher poolingWatcher = null;
+    private File projectRoot = new File(".");
+
     public GrailsProjectWatcher(final GrailsProjectCompiler compiler, GrailsPluginManager pluginManager) {
+        setDaemon(true);
+
         this.pluginManager = pluginManager;
         compilerExtensions = compiler.getCompilerExtensions();
         this.compiler = compiler;
+        this.poolingWatcher = new PoolingDirectoryWatcher();
+        this.projectWatcher = getProjectWatcher();
         if (isReloadingAgentPresent()) {
             GrailsPluginManagerReloadPlugin.register();
         }
@@ -175,7 +186,8 @@ public class GrailsProjectWatcher extends DirectoryWatcher {
             initPluginWatchPatterns();
         }
 
-        super.run();
+        if (projectWatcher != null) projectWatcher.run(); //should be before pooling watcher since async nature
+        poolingWatcher.run();
     }
 
     private void initPluginWatchPatterns() {
@@ -319,6 +331,103 @@ public class GrailsProjectWatcher extends DirectoryWatcher {
             }
         }
         return null;
+    }
+
+    /**
+     * Sets whether to stop the directory watcher
+     *
+     * @param active False if you want to stop watching
+     */
+    @Override
+    public void setActive(boolean active) {
+        poolingWatcher.setActive(active);
+        if (projectWatcher != null) projectWatcher.setActive(active);
+    }
+
+    /**
+     * Adds a file listener that can react to change events
+     *
+     * @param listener The file listener
+     */
+    @Override
+    public void addListener(FileChangeListener listener) {
+        poolingWatcher.addListener(listener);
+        if (projectWatcher != null) projectWatcher.addListener(listener);
+    }
+
+    /**
+     * Adds a file to the watch list
+     *
+     * @param fileToWatch The file to watch
+     */
+    @Override
+    public void addWatchFile(File fileToWatch) {
+        if (projectWatcher != null && isProjectFile(fileToWatch)) {
+            projectWatcher.addWatchFile(fileToWatch);
+        } else {
+            poolingWatcher.addWatchFile(fileToWatch);
+        }
+    }
+
+    /**
+     * Adds a directory to watch for the given file and extensions.
+     *
+     * @param dir The directory
+     * @param fileExtensions The extensions
+     */
+    @Override
+    public void addWatchDirectory(File dir, List<String> fileExtensions) {
+        if (projectWatcher != null && isProjectFile(dir)) {
+            projectWatcher.addWatchDirectory(dir, fileExtensions);
+        } else {
+            poolingWatcher.addWatchDirectory(dir, fileExtensions);
+        }
+    }
+
+    /**
+     * Adds a directory to watch for the given file and extensions.
+     *
+     * @param dir The directory
+     * @param extension The extension
+     */
+    @Override
+    public void addWatchDirectory(File dir, String extension) {
+        if (projectWatcher != null && isProjectFile(dir)) {
+            projectWatcher.addWatchDirectory(dir, extension);
+        } else {
+            poolingWatcher.addWatchDirectory(dir, extension);
+        }
+    }
+
+    private DirectoryWatcher getProjectWatcher() {
+        io.belov.grails.DirectoryWatcher watcher = null;
+
+        try {
+            if (SystemUtils.IS_OS_WINDOWS) {
+                watcher = (io.belov.grails.DirectoryWatcher) Class.forName("io.belov.grails.win.WindowsBaseDirectoryWatcher").getConstructor(File.class, Boolean.class).newInstance(projectRoot, true);
+            } else if (SystemUtils.IS_OS_LINUX) {
+                watcher = (io.belov.grails.DirectoryWatcher) Class.forName("io.belov.grails.SavedRecursiveDirectoryWatcher").newInstance();
+            }
+        } catch (Exception e) {
+            //do nothing
+        }
+
+        if (watcher != null) {
+            return new JavaDirectoryWatcherAdapter(watcher);
+        } else {
+            return null;
+        }
+    }
+
+    private boolean isProjectFile(File file) {
+        try {
+            String filePath = file.getCanonicalPath();
+            String rootPath = projectRoot.getCanonicalPath();
+
+            return (rootPath.equals(filePath) || StringUtils.startsWith(filePath, rootPath));
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private interface ClassUpdate {
