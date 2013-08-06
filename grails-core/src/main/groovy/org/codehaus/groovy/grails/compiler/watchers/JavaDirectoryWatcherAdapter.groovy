@@ -3,7 +3,7 @@
  * Copyright (c) 2012 Cybervision. All rights reserved.
  */
 package org.codehaus.groovy.grails.compiler.watchers
-import io.belov.grails.DirectoryWatcher as JavaDirectoryWatcher
+import io.belov.grails.watchers.DirectoryWatcher as JavaDirectoryWatcher
 import io.belov.grails.FileChangeListener as JavaChangeListener
 import io.belov.grails.filters.CompositeFilter
 import io.belov.grails.filters.EndsWithFilter
@@ -62,7 +62,7 @@ class JavaDirectoryWatcherAdapter implements DirectoryWatcher {
      */
     @Override
     public void addWatchFile(File fileToWatch) {
-        watcher.addWatchFile(fileToWatch.toPath());
+        watcher.addWatchFile(fileToWatch);
     }
 
     /**
@@ -79,7 +79,7 @@ class JavaDirectoryWatcherAdapter implements DirectoryWatcher {
             compositeFilter.add(new EndsWithFilter(extension));
         }
 
-        watcher.addWatchDirectory(dir.toPath(), compositeFilter);
+        watcher.addWatchDirectory(dir, compositeFilter);
     }
 
     /**
@@ -90,7 +90,7 @@ class JavaDirectoryWatcherAdapter implements DirectoryWatcher {
      */
     @Override
     public void addWatchDirectory(File dir, String extension) {
-        watcher.addWatchDirectory(dir.toPath(), new EndsWithFilter(extension));
+        watcher.addWatchDirectory(dir, new EndsWithFilter(extension));
     }
 
     @Override

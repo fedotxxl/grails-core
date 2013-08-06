@@ -3,7 +3,7 @@ package org.codehaus.groovy.grails.compiler.watchers
 /**
  * Interface for FileChangeListeners
  */
-public static interface FileChangeListener {
+public interface FileChangeListener {
     /**
      * Fired when a file changes
      *

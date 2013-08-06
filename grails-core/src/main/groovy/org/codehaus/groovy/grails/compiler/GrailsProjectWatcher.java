@@ -400,15 +400,15 @@ public class GrailsProjectWatcher extends Thread implements DirectoryWatcher {
     }
 
     private DirectoryWatcher getProjectWatcher() {
-        io.belov.grails.DirectoryWatcher watcher = null;
+        io.belov.grails.watchers.DirectoryWatcher watcher = null;
 
         try {
             if (SystemUtils.IS_OS_WINDOWS) {
-                watcher = (io.belov.grails.DirectoryWatcher) Class.forName("io.belov.grails.win.WindowsBaseDirectoryWatcher").getConstructor(File.class, Boolean.class).newInstance(projectRoot, true);
+                watcher = (io.belov.grails.watchers.DirectoryWatcher) Class.forName("io.belov.grails.watchers.WindowsBaseDirectoryWatcher").getConstructor(File.class).newInstance(projectRoot);
             } else if (SystemUtils.IS_OS_LINUX) {
-                watcher = (io.belov.grails.DirectoryWatcher) Class.forName("io.belov.grails.SavedRecursiveDirectoryWatcher").newInstance();
+                watcher = (io.belov.grails.watchers.DirectoryWatcher) Class.forName("io.belov.grails.watchers.SavedRecursiveDirectoryWatcher").newInstance();
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             //do nothing
         }
 
